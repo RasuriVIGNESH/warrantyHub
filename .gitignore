@@ -1,0 +1,36 @@
+# dependencies
+frontend/node_modules/
+
+# production build
+frontend/build/
+frontend/.env
+frontend/.DS_Store
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+
+
+
+
+backend/target/
+backend/*.log
+backend/*.class
+backend/*.jar
+backend/*.war
+backend/*.ear
+
+backend/.idea/
+backend/.iml
+backend/.vscode/
+backend/.classpath
+backend/.project
+backend/.settings/
+
+backend/.mvn/
+backend/.mvnw
+backend/.mvnw.cmd
+
+backend/.env
+backend/application-*.properties
+
+backend/.DS_Store
+backend/Thumbs.db
