@@ -25,28 +25,9 @@ class DeviceService {
       return response.data;
     }
 
-    async downloadDocument(deviceId, documentId) {
-      const response = await api.get(`${DEVICE_ENDPOINTS.BASE}/${deviceId}/documents/${documentId}`, {
-        responseType: 'blob',
-      });
-      
-      // ✨ MODIFIED: Return the blob and filename instead of creating a link
-      const contentDisposition = response.headers['content-disposition'];
-      let filename = 'download';
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-        if (filenameMatch && filenameMatch[1]) {
-          filename = filenameMatch[1];
-        }
-      }
-      
-      return { blob: response.data, filename: filename };
-    }
-
-    async deleteDocument(deviceId, documentId) {
-      const response = await api.delete(`${DEVICE_ENDPOINTS.BASE}/${deviceId}/documents/${documentId}`);
-      return response.data;
-    }
+    // Note: single-document GET and DELETE endpoints were removed from the backend.
+    // Document files are hosted externally (e.g. Cloudinary) and the `fileUrl`
+    // returned by `getDocuments` should be used directly in the frontend.
   async getAllDevices(params = {}) {
     const response = await api.get(DEVICE_ENDPOINTS.BASE, { params });
     return response.data;

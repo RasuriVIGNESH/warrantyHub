@@ -10,12 +10,15 @@ export function DocumentPreview({ documents, onDocumentClick }) {
     return null;
   }
 
-  const handleDocumentClick = async (docId) => {
-    setDownloadingIds(prev => new Set([...prev, docId]));
+  const handleDocumentClick = async (doc) => {
+    const docId = doc?.id;
+    if (docId) setDownloadingIds(prev => new Set([...prev, docId]));
     try {
-      await onDocumentClick(docId);
+      // Prefer the provided fileUrl; pass the whole document object so callers
+      // can decide how to handle it (we open fileUrl in hooks now).
+      await onDocumentClick(doc);
     } finally {
-      setDownloadingIds(prev => {
+      if (docId) setDownloadingIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(docId);
         return newSet;
@@ -30,9 +33,9 @@ export function DocumentPreview({ documents, onDocumentClick }) {
         {documents.map((doc) => {
           const isDownloading = downloadingIds.has(doc.id);
           return (
-            <div 
+              <div 
               key={doc.id} 
-              onClick={() => !isDownloading && handleDocumentClick(doc.id)}
+              onClick={() => !isDownloading && handleDocumentClick(doc)}
               className={`group relative cursor-pointer overflow-hidden rounded-lg border bg-gray-50 dark:bg-gray-800 dark:border-gray-700 p-2 text-center transition-all hover:shadow-md hover:border-primary/50 ${
                 isDownloading ? 'opacity-50 cursor-wait' : ''
               }`}
@@ -44,8 +47,14 @@ export function DocumentPreview({ documents, onDocumentClick }) {
                   <>
                     {/* Check if it's an image based on file extension or MIME type */}
                     {(doc.name && (doc.name.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp)$/) || 
-                         (doc.type && doc.type.startsWith('image/')))) ? (
-                      <ImageIcon className="w-10 h-10 text-gray-400 group-hover:text-primary" />
+                         (doc.fileType && doc.fileType.startsWith('image/')))) ? (
+                      doc.fileUrl ? (
+                        <div className="w-full h-full p-2">
+                          <img src={doc.fileUrl} alt={doc.name} className="object-cover h-full w-full rounded-md" />
+                        </div>
+                      ) : (
+                        <ImageIcon className="w-10 h-10 text-gray-400 group-hover:text-primary" />
+                      )
                     ) : (
                       <FileText className="w-10 h-10 text-gray-400 group-hover:text-primary" />
                     )}

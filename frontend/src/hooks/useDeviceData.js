@@ -114,18 +114,18 @@ export function useDeviceDetail(deviceId) {
     }
   };
 
-  // Function to download and open a document
-  const downloadDocument = async (documentId) => {
+  // Function to open a document using its external `fileUrl` (no backend call)
+  const downloadDocument = async (document) => {
     try {
-      const { blob } = await deviceService.downloadDocument(deviceId, documentId);
-      const url = window.URL.createObjectURL(blob);
-      // Open in a new tab instead of downloading
-      window.open(url, '_blank', 'noopener,noreferrer');
-      // Revoke after short delay to allow the new tab to load
-      setTimeout(() => window.URL.revokeObjectURL(url), 2000);
+      if (document && document.fileUrl) {
+        window.open(document.fileUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        console.warn('Document has no fileUrl to open:', document);
+        alert('Document URL is not available.');
+      }
     } catch (err) {
-      console.error("Failed to open document:", err);
-      alert("Failed to open document. Please try again.");
+      console.error('Failed to open document:', err);
+      alert('Failed to open document. Please try again.');
       throw err;
     }
   };

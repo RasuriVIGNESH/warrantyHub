@@ -41,16 +41,16 @@ export function useDevices() {
     }
   }, [isAuthenticated]);
 
-  // ✨ NEW: Function to download a document and open it in a new tab
-  const downloadDocument = async (deviceId, documentId) => {
+  // Function to open a document using its external `fileUrl` (no backend call)
+  const downloadDocument = async (document) => {
     try {
-      const { blob } = await deviceService.downloadDocument(deviceId, documentId);
-      const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => window.URL.revokeObjectURL(url), 100); // Clean up the URL object
+      if (document && document.fileUrl) {
+        window.open(document.fileUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        console.warn('Document has no fileUrl to open:', document);
+      }
     } catch (err) {
-      console.error("Failed to download document:", err);
-      // Optionally set an error state to show a message to the user
+      console.error('Failed to open document:', err);
     }
   };
 
