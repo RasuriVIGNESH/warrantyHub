@@ -11,9 +11,21 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Clear authentication state
+  // Store both tokens the same way everywhere they're received: from
+  // email/password login, from register (which now auto-logs-in, since the
+  // backend returns the same {token, refreshToken} shape as login), and
+  // from the Google OAuth2 callback.
+  const storeTokens = useCallback(({ token, refreshToken }) => {
+    if (token) localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, token);
+    if (refreshToken) localStorage.setItem(AUTH_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
+  }, []);
+
+  // Clear authentication state (both tokens - a stale refresh token left
+  // behind after logout would let a "logged out" tab silently get a new
+  // access token on its next 401).
   const clearAuthState = useCallback(() => {
     localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
+    localStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
     setUser(null);
     setError(null);
     setIsLoading(false);
@@ -57,12 +69,10 @@ export function AuthProvider({ children }) {
       setIsLoading(true);
       setError(null);
       const data = await AuthService.login(email, password);
-      if (data.token) {
-        localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, data.token);
-        const success = await loadUserFromToken();
-        if (!success) {
-          throw new Error('Failed to load user profile after login');
-        }
+      storeTokens(data); // stores both token + refreshToken
+      const success = await loadUserFromToken();
+      if (!success) {
+        throw new Error('Failed to load user profile after login');
       }
       return data;
     } catch (err) {
@@ -71,12 +81,15 @@ export function AuthProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  }, [loadUserFromToken]);
+  }, [loadUserFromToken, storeTokens]);
 
   // Logout
   const logout = useCallback(async () => {
     try {
       setIsLoading(true);
+      // Server-side this only deletes the refresh token; the access token
+      // just expires naturally. We still clear both locally regardless of
+      // whether the request succeeds.
       await AuthService.logout();
     } catch (err) {
       console.error('Logout error:', err);
@@ -85,15 +98,15 @@ export function AuthProvider({ children }) {
     }
   }, [clearAuthState]);
 
-  // Login with OAuth2 token
-  const loginWithToken = useCallback(async (token) => {
+  // Login with an already-issued token pair (used by the Google OAuth2 callback)
+  const loginWithToken = useCallback(async (token, refreshToken) => {
     try {
       setIsLoading(true);
       setError(null);
       if (!token || token.trim() === '') {
         throw new Error('Invalid token provided');
       }
-      localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, token);
+      storeTokens({ token, refreshToken });
       const success = await loadUserFromToken();
       if (!success) {
         throw new Error('Failed to authenticate with provided token');
@@ -104,22 +117,30 @@ export function AuthProvider({ children }) {
       clearAuthState();
       throw err;
     }
-  }, [loadUserFromToken, clearAuthState]);
+  }, [loadUserFromToken, clearAuthState, storeTokens]);
 
-  // Register a new user
+  // Register a new user.
+  // The backend now returns the same { success, user, token, refreshToken }
+  // shape as login - registration auto-logs the user in, no separate login
+  // step required.
   const registerUser = useCallback(async (userData) => {
     try {
       setIsLoading(true);
       setError(null);
-      const responseData = await AuthService.register(userData);
-      return responseData;
+      const data = await AuthService.register(userData);
+      storeTokens(data);
+      const success = await loadUserFromToken();
+      if (!success) {
+        throw new Error('Failed to load user profile after registration');
+      }
+      return data;
     } catch (err) {
       setError(err.message || 'Registration failed');
       throw err;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [loadUserFromToken, storeTokens]);
 
   // Refresh user profile
   const refreshUser = useCallback(async () => {
@@ -131,7 +152,6 @@ export function AuthProvider({ children }) {
     loadUserFromToken();
   }, [loadUserFromToken]);
 
-  // ✨ FIX: This value object is now memoized to prevent unnecessary re-renders
   const value = useMemo(() => ({
     user,
     isLoading,
@@ -143,7 +163,6 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user && !error,
     clearError: () => setError(null),
     registerUser,
-    // ✨ FIX: The dependency array includes all values used to create the object
   }), [user, isLoading, error, login, logout, loginWithToken, refreshUser, registerUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -63,6 +63,7 @@ export const OAUTH2_CONFIG = {
   // OAuth2 flow settings
   CALLBACK_PATH: '/oauth2/redirect',
   REDIRECT_PATH_KEY: 'oauth2_redirect_path',
+  SUCCESS_REDIRECT: '/dashboard',
   
   // URL parameters for OAuth2 callback
   URL_PARAMS: {

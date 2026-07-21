@@ -3,34 +3,40 @@ import { useNavigate } from 'react-router-dom';
 import { useDevices } from '../hooks/useDevices';
 import { Card } from '../components/ui/Card';
 import { NotificationDropdown } from '../components/ui/NotificationDropdown';
-import { SpendingChart } from '../components/dashboard/SpendingChart'; // ✨ ADDED: Import the chart component
+import { getDeviceIcon } from '../utils/getDeviceIcon'; // ♻️ shared icon logic (was duplicated inline)
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { 
-  Tv,
-  Smartphone,
-  Laptop,
-  Package,
-  Refrigerator,
-  WashingMachine,
-  AirVent,
-  Droplet,
   Shield,
   Clock,
   AlertTriangle,
   ChevronRight
 } from 'lucide-react';
 
-const getDeviceIcon = (device) => {
-  const searchText = ((device.name || '') + ' ' + (device.model || '') + ' ' + (device.manufacturer || '')).toLowerCase();
-  
-  if (searchText.includes('macbook') || searchText.includes('laptop') || searchText.includes('notebook')) return Laptop;
-  if (searchText.includes('iphone') || searchText.includes('phone') || searchText.includes('smartphone') || searchText.includes('mobile')) return Smartphone;
-  if (searchText.includes('tv') || searchText.includes('television')) return Tv;
-  if (searchText.includes('refrigerator') || searchText.includes('fridge')) return Refrigerator;
-  if (searchText.includes('washing') || searchText.includes('washer')) return WashingMachine;
-  if (searchText.includes('air') || searchText.includes('ac')) return AirVent;
-  if (searchText.includes('water') || searchText.includes('purifier')) return Droplet;
-  return Package;
-};
+// 🔽 Local sub-component: only used on this page, so it lives here instead of its own file.
+function SpendingChart({ data }) {
+  const formatCurrency = (value) => `₹${value.toLocaleString('en-IN')}`;
+
+  return (
+    <div style={{ width: '100%', height: 300 }}>
+      <ResponsiveContainer>
+        <BarChart
+          data={data}
+          margin={{ top: 5, right: 20, left: 30, bottom: 5 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.3)" />
+          <XAxis dataKey="year" />
+          <YAxis tickFormatter={formatCurrency} />
+          <Tooltip
+            formatter={(value) => [formatCurrency(value), 'Spending']}
+            cursor={{ fill: 'rgba(128, 128, 128, 0.1)' }}
+          />
+          <Legend />
+          <Bar dataKey="spending" fill="#3b82f6" name="Total Spending" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 export function Dashboard() {
   const { devices, loading, error } = useDevices();

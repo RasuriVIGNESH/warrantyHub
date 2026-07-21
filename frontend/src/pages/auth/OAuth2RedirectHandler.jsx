@@ -25,13 +25,6 @@ export function OAuth2RedirectHandler() {
         const error = searchParams.get('error');
         const errorMessage = searchParams.get('message');
 
-        console.log('OAuth2 callback received:', {
-          hasToken: !!token,
-          hasRefreshToken: !!refreshToken,
-          success,
-          error,
-          errorMessage
-        });
 
         // Handle OAuth2 errors
         if (error) {
@@ -64,27 +57,23 @@ export function OAuth2RedirectHandler() {
           return;
         }
 
-        console.log('Valid OAuth2 token received, processing...');
         setMessage('Authentication successful! Setting up your account...');
 
-        // Store refresh token if provided
-        if (refreshToken) {
-          localStorage.setItem('refreshToken', refreshToken);
-          console.log('Refresh token stored');
-        }
-
-        // Use the loginWithToken method from AuthContext
-        await loginWithToken(token);
+        // Store both tokens via AuthContext (single source of truth for
+        // token storage - keeps this consistent with the email/password
+        // login path instead of writing to localStorage directly here).
+        await loginWithToken(token, refreshToken);
 
         setStatus('success');
         setMessage('Successfully signed in! Redirecting to dashboard...');
         toast.success('Successfully signed in with Google!');
 
         // Get the stored redirect path or default to dashboard
-        const redirectPath = sessionStorage.getItem('oauth2_redirect_path') || '/dashboard';
+        const stored = sessionStorage.getItem('oauth2_redirect_path');
+        const redirectPath = stored && stored !== 'undefined' && stored.startsWith('/')
+          ? stored
+          : '/dashboard';
         sessionStorage.removeItem('oauth2_redirect_path');
-
-        console.log('OAuth2 authentication complete, redirecting to:', redirectPath);
 
         // Short delay to show success message
         setTimeout(() => {

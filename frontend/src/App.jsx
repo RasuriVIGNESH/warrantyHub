@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -10,6 +10,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { ErrorFallback } from './components/ErrorFallback';
 
 // Lazy load pages
+const LandingPage = lazy(() => import('./pages/LandingPage'));
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const Devices = lazy(() => import('./pages/Devices').then(m => ({ default: m.Devices })));
 const AddDevice = lazy(() => import('./pages/AddDevice').then(m => ({ default: m.AddDevice })));
@@ -18,10 +19,10 @@ const Login = lazy(() => import('./pages/auth/Login').then(m => ({ default: m.Lo
 const Register = lazy(() => import('./pages/auth/Register').then(m => ({ default: m.Register })));
 const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
 const ResetPassword = lazy(() => import('./pages/auth/ResetPassword').then(m => ({ default: m.ResetPassword })));
+const OAuth2RedirectHandler = lazy(() => import('./pages/auth/OAuth2RedirectHandler').then(m => ({ default: m.OAuth2RedirectHandler })));
 const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 const UpdateProfile = lazy(() => import('./pages/UpdateProfile').then(m => ({ default: m.UpdateProfile })));
-const OAuth2RedirectHandler = lazy(() => import('./components/auth/OAuth2RedirectHandler').then(m => ({ default: m.OAuth2RedirectHandler })));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -29,32 +30,42 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
-      cacheTime: 0, // Disable caching
-      staleTime: 0, // Consider data stale immediately
+      staleTime: 60 * 1000,       // data is fresh for 60s - avoids refetching on every nav
+      gcTime: 5 * 60 * 1000,      // keep cache around for 5 min
     },
   },
 });
 
-// Clear any existing cache
-queryClient.clear();
+// 🔽 Route guards. Both are only ever used here in App.jsx (single use each),
+// so - consistent with the "one file per page/usage" cleanup - they live
+// here instead of as separate files under components/auth/.
 
+// Gate for pages that require login (Dashboard, Devices, etc.)
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
-  
+  const location = useLocation();
+
   if (isLoading) {
     return <LoadingScreen />;
   }
-  
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
 }
 
+// Gate for pages that should only be visible when logged OUT
+// (Landing page, Login, Register, etc.) - bounces straight to /dashboard
+// if a valid session already exists.
 function PublicRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
-  
+
   if (isLoading) {
     return <LoadingScreen />;
   }
-  
+
   return isAuthenticated ? <Navigate to="/dashboard" replace /> : children;
 }
 
@@ -62,6 +73,15 @@ function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Landing Page (public marketing page at root) */}
+        <Route path="/" element={
+          <PublicRoute>
+            <Suspense fallback={<LoadingScreen />}>
+              <LandingPage />
+            </Suspense>
+          </PublicRoute>
+        } />
+
         {/* Public Routes */}
         <Route path="/login" element={
           <PublicRoute>
@@ -104,7 +124,6 @@ function AppRoutes() {
             <Layout />
           </ProtectedRoute>
         }>
-          <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={
             <Suspense fallback={<LoadingScreen />}>
               <Dashboard />
@@ -165,4 +184,3 @@ export default function App() {
     </ErrorBoundary>
   );
 }
-
