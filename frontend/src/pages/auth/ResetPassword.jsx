@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { Lock, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
@@ -219,4 +219,4 @@ export function ResetPassword() {
       </div>
     </div>
   );
-} 
+}

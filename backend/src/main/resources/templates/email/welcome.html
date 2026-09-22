@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" style="margin:0; padding:0;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to WarrantyHub!</title>
+    <style>
+        body {
+            background: linear-gradient(135deg, #e3f0ff 0%, #f4f6fb 100%);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 18px;
+            box-shadow: 0 8px 32px rgba(45,108,223,0.12);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(90deg, #2d6cdf 60%, #4f8cff 100%);
+            color: #fff;
+            padding: 40px 24px 24px 24px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+        .header img {
+            width: 80px;
+            margin-bottom: 16px;
+        }
+        .content {
+            padding: 36px 28px;
+            color: #333;
+            font-size: 1.15em;
+            line-height: 1.7;
+        }
+        .cta {
+            display: block;
+            width: fit-content;
+            margin: 36px auto 0 auto;
+            background: linear-gradient(90deg, #2d6cdf 60%, #4f8cff 100%);
+            color: #fff;
+            text-decoration: none;
+            padding: 16px 40px;
+            border-radius: 8px;
+            font-size: 1.2em;
+            font-weight: 700;
+            box-shadow: 0 4px 16px rgba(45,108,223,0.16);
+            transition: background 0.2s;
+        }
+        .footer {
+            background: #f4f6fb;
+            color: #888;
+            text-align: center;
+            padding: 18px 0;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt="WarrantyHub Logo" />
+            <h1>Welcome to WarrantyHub!</h1>
+        </div>
+        <div class="content">
+            <p>Hi <strong>{{userName}}</strong>,</p>
+            <p>We're thrilled to have you join <span style="color:#2d6cdf;font-weight:600;">WarrantyHub</span>! Your personal hub for managing all your device warranties, maintenance schedules, and reminders.</p>
+            <ul style="margin: 24px 0 0 18px; color:#2d6cdf;">
+                <li>Track warranty periods and get timely alerts</li>
+                <li>Organize device documents and receipts</li>
+                <li>Never miss a maintenance schedule</li>
+            </ul>
+            <a href="{{dashboardUrl}}" class="cta">Go to Your Dashboard</a>
+        </div>
+        <div class="footer">
+            &copy; 2025 WarrantyHub. All rights reserved.<br>
+            Need help? Contact us at <a href="mailto:support@warrantyhub.com" style="color:#2d6cdf;text-decoration:none;">support@warrantyhub.com</a>
+        </div>
+    </div>
+</body>
+</html>

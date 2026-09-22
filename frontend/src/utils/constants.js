@@ -7,10 +7,9 @@
 // AUTHENTICATION CONFIGURATION
 // =============================================================================
 export const AUTH_CONFIG = {
-  // Token storage keys
-  TOKEN_KEY: 'accessToken',
-  REFRESH_TOKEN_KEY: 'refreshToken',
-  USER_KEY: 'user',
+  TOKEN_KEY: 'warrantyhub_accessToken',
+  REFRESH_TOKEN_KEY: 'warrantyhub_refreshToken',
+  USER_KEY: 'warrantyhub_user',
   
   // Token expiration buffer (refresh token 5 minutes before actual expiry)
   TOKEN_REFRESH_BUFFER: 5 * 60 * 1000, // 5 minutes in milliseconds

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { Mail } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function ForgotPassword() {
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -123,4 +123,4 @@ export function ForgotPassword() {
       </div>
     </div>
   );
-} 
+}

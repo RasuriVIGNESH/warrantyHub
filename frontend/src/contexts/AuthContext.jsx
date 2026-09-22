@@ -147,6 +147,18 @@ export function AuthProvider({ children }) {
     return loadUserFromToken();
   }, [loadUserFromToken]);
 
+  // Forgot / reset password - thin wrappers around AuthService so the pages
+  // can call these through the same useAuth() surface as everything else.
+  const forgotPassword = useCallback(async (email) => {
+    const data = await AuthService.forgotPassword(email);
+    return data?.success ?? true;
+  }, []);
+
+  const resetPassword = useCallback(async (token, password) => {
+    const data = await AuthService.resetPassword(token, password);
+    return data?.success ?? true;
+  }, []);
+
   // Initialize authentication state on mount
   useEffect(() => {
     loadUserFromToken();
@@ -163,7 +175,9 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user && !error,
     clearError: () => setError(null),
     registerUser,
-  }), [user, isLoading, error, login, logout, loginWithToken, refreshUser, registerUser]);
+    forgotPassword,
+    resetPassword,
+  }), [user, isLoading, error, login, logout, loginWithToken, refreshUser, registerUser, forgotPassword, resetPassword]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

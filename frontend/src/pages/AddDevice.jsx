@@ -7,7 +7,7 @@ import {
   Watch, Tablet, Wifi, Plug, Microwave, Lock, Thermometer, HardDrive, Headphones,
   ScanLine, Video, DoorClosed, PlaySquare, Projector, Disc
 } from 'lucide-react';
-import { useDevices } from '../hooks/useDevices';
+import { useCreateDevice } from '../hooks/useDevices';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -128,7 +128,7 @@ function DeviceTypeSelector({ onSelect }) {
 
 export function AddDevice() {
   const navigate = useNavigate();
-  const { createDevice } = useDevices();
+  const createDeviceMutation = useCreateDevice();
   const [loading, setLoading] = useState(false);
   const [selectedDeviceType, setSelectedDeviceType] = useState(null);
   const [formData, setFormData] = useState({
@@ -185,8 +185,8 @@ export function AddDevice() {
         description: '',
       };
 
-      // Pass both the device data and the file object to the hook
-      await createDevice(deviceData, warrantyDocument);
+      // Pass both the device data and the file object to the mutation
+      await createDeviceMutation.mutateAsync({ deviceData, file: warrantyDocument });
       
       navigate('/devices');
     } catch (error) {

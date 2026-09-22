@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Warranty Expiration Reminder</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+</head>
+<body>
+    <h1>Warranty Expiration Notice</h1>
+    <p>Hello <span th:text="${name}">User</span>,</p>
+
+    <p>This is a reminder that the warranty for your device "<span th:text="${deviceName}">device</span>"
+       will expire in <span th:text="${daysRemaining}">30</span> days
+       (on <span th:text="${#temporals.format(warrantyEndDate, 'MMMM dd, yyyy')}">January 1, 2026</span>).</p>
+
+    <p>We recommend:</p>
+    <ul>
+        <li>Reviewing your warranty coverage</li>
+        <li>Checking for any pending maintenance</li>
+        <li>Considering warranty extension options if available</li>
+    </ul>
+
+    <p>Log in to your WarrantyHub account to view full details and manage your device warranties.</p>
+
+    <p>Best regards,<br/>
+    WarrantyHub Team</p>
+</body>
+</html>
+

@@ -1,187 +1,163 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useAuth } from './useAuth';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../contexts/AuthContext';
 import deviceService from '../services/deviceService';
 
-export function useDevices() {
+// ============================================================================
+// Single source of truth for all device/document/maintenance data-fetching.
+// Everything goes through React Query so that:
+//   - the same query key = one shared cache entry, read by every page that
+//     needs it (Dashboard + Devices both read ['devices'], nothing here ever
+//     fires two independent network calls for the same data)
+//   - staleTime/gcTime (configured in App.jsx: 60s / 5min) means revisiting
+//     a page you were just on serves cached data instantly, no refetch
+//   - past staleTime, React Query serves the cached (stale) data immediately
+//     AND refetches in the background, swapping in fresh data if it changed
+//     - this *is* the "show cached data now, update if backend has changed
+//       it" behavior, for free
+//   - mutations (create/update/delete) patch the cache directly instead of
+//     forcing a full list refetch, so the UI updates instantly
+// ============================================================================
+
+const deviceKeys = {
+  all: ['devices'],
+  detail: (id) => ['devices', id],
+  documents: (id) => ['devices', id, 'documents'],
+};
+
+// ---- Queries --------------------------------------------------------------
+
+export function useDevicesQuery() {
   const { isAuthenticated } = useAuth();
-  const [devices, setDevices] = useState([]);
-  const [documents, setDocuments] = useState([]); // ✨ ADDED: State for a specific device's documents
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const fetchDevices = useCallback(async () => {
-    if (!isAuthenticated) {
-      setLoading(false);
-      return [];
-    }
-    try {
-      setLoading(true);
-      setError(null);
+  return useQuery({
+    queryKey: deviceKeys.all,
+    queryFn: async () => {
       const data = await deviceService.getAllDevices();
-      const deviceArray = Array.isArray(data) ? data : (Array.isArray(data?.devices) ? data.devices : []);
-      setDevices(deviceArray);
-      return deviceArray;
-    } catch (err) {
-      setError(err.message || 'Failed to fetch devices');
-      setDevices([]);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [isAuthenticated]);
+      return Array.isArray(data) ? data : (Array.isArray(data?.devices) ? data.devices : []);
+    },
+    enabled: isAuthenticated,
+  });
+}
 
-  const fetchDocuments = useCallback(async (deviceId) => {
-    if (!isAuthenticated) return;
-    try {
+export function useDeviceQuery(deviceId) {
+  const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useQuery({
+    queryKey: deviceKeys.detail(deviceId),
+    queryFn: () => deviceService.getDeviceById(deviceId),
+    enabled: isAuthenticated && !!deviceId,
+    // Paint instantly with whatever we already have for this device from the
+    // devices-list cache (e.g. the user just came from /devices), while this
+    // query fetches the authoritative single-device record in the background.
+    initialData: () => {
+      const list = queryClient.getQueryData(deviceKeys.all);
+      return list?.find((d) => d.id === deviceId);
+    },
+    initialDataUpdatedAt: () => queryClient.getQueryState(deviceKeys.all)?.dataUpdatedAt,
+  });
+}
+
+export function useDocumentsQuery(deviceId) {
+  const { isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: deviceKeys.documents(deviceId),
+    queryFn: async () => {
       const docs = await deviceService.getDocuments(deviceId);
-      setDocuments(Array.isArray(docs) ? docs : []);
-    } catch (err) {
-      console.error("Failed to fetch documents:", err);
-      setDocuments([]);
-    }
-  }, [isAuthenticated]);
+      return Array.isArray(docs) ? docs : [];
+    },
+    enabled: isAuthenticated && !!deviceId,
+  });
+}
 
-  // Function to open a document using its external `fileUrl` (no backend call)
-  const downloadDocument = async (document) => {
-    try {
-      if (document && document.fileUrl) {
-        window.open(document.fileUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        console.warn('Document has no fileUrl to open:', document);
-      }
-    } catch (err) {
-      console.error('Failed to open document:', err);
-    }
-  };
+// ---- Mutations --------------------------------------------------------------
+// Each one updates the relevant cache entries directly on success, so every
+// page reading that data re-renders with the fresh value with no extra
+// network round-trip.
 
-
-  // Create a new device
-  // ✨ MODIFIED: Now accepts an optional 'file' argument
-  const createDevice = async (deviceData, file) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Step 1: Create the device with metadata
+export function useCreateDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ deviceData, file }) => {
       const newDevice = await deviceService.createDevice(deviceData);
-      
-      // Step 2: If a file exists, upload it to the newly created device
       if (file && newDevice.id) {
         await deviceService.uploadDocument(newDevice.id, file);
       }
-
-      // Add the new device to the local state
-      setDevices(prev => [...prev, newDevice]);
       return newDevice;
-    } catch (err) {
-      setError(err.message || 'Failed to create device');
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    onSuccess: (newDevice) => {
+      queryClient.setQueryData(deviceKeys.all, (old = []) => [...old, newDevice]);
+    },
+  });
+}
 
-  // Update an existing device
-  const updateDevice = async (deviceId, deviceData) => {
-    try {
-      const updatedDevice = await deviceService.updateDevice(deviceId, deviceData);
-      // Update the device in the main list
-      setDevices(prev =>
-        prev.map(device =>
-          device.id === deviceId ? { ...device, ...updatedDevice } : device
-        )
+export function useUpdateDevice(deviceId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (deviceData) => deviceService.updateDevice(deviceId, deviceData),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(deviceKeys.detail(deviceId), (old) => ({ ...old, ...updated }));
+      queryClient.setQueryData(deviceKeys.all, (old = []) =>
+        old.map((d) => (d.id === deviceId ? { ...d, ...updated } : d))
       );
-      // Return the updated device data to refresh the details view
-      return updatedDevice;
-    } catch (err) {
-      console.error('Failed to update device:', err);
-      // You can also set an error state here
-      throw err; // Re-throw error to be caught in the component
-    }
-  };
-  const uploadDocuments = async (deviceId, files) => {
-    try {
-      // Create an array of upload promises
-      const uploadPromises = files.map(file => deviceService.uploadDocument(deviceId, file));
-      
-      // Wait for all files to upload
-      await Promise.all(uploadPromises);
-      
-      // After all uploads are successful, refresh the document list
-      await fetchDocuments(deviceId);
-    } catch (err) {
-      console.error('Failed to upload documents:', err);
-      throw err;
-    }
-  };
+    },
+  });
+}
 
-  // Add maintenance record
-  const addMaintenanceRecord = async (deviceId, record) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const updatedDevice = await deviceService.addMaintenanceRecord(deviceId, record);
-      setDevices(prev =>
-        prev.map(device =>
-          device.id === deviceId ? updatedDevice : device
-        )
+export function useDeleteDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (deviceId) => deviceService.deleteDevice(deviceId),
+    onSuccess: (_result, deviceId) => {
+      queryClient.setQueryData(deviceKeys.all, (old = []) => old.filter((d) => d.id !== deviceId));
+      queryClient.removeQueries({ queryKey: deviceKeys.detail(deviceId) });
+      queryClient.removeQueries({ queryKey: deviceKeys.documents(deviceId) });
+    },
+  });
+}
+
+export function useUploadDocuments(deviceId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (files) => {
+      await Promise.all(files.map((file) => deviceService.uploadDocument(deviceId, file)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: deviceKeys.documents(deviceId) });
+    },
+  });
+}
+
+export function useDeleteDocument(deviceId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (documentId) => deviceService.deleteDocument(deviceId, documentId),
+    onSuccess: (_result, documentId) => {
+      queryClient.setQueryData(deviceKeys.documents(deviceId), (old = []) =>
+        old.filter((doc) => doc.id !== documentId)
       );
-      return updatedDevice;
-    } catch (err) {
-      setError(err.message || 'Failed to add maintenance record');
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
+}
 
+export function useAddMaintenanceRecord(deviceId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (record) => deviceService.addMaintenanceRecord(deviceId, record),
+    onSuccess: (updatedDevice) => {
+      queryClient.setQueryData(deviceKeys.detail(deviceId), updatedDevice);
+      queryClient.setQueryData(deviceKeys.all, (old = []) =>
+        old.map((d) => (d.id === deviceId ? updatedDevice : d))
+      );
+    },
+  });
+}
 
-  // Delete a device
-  const deleteDevice = async (deviceId) => {
-    try {
-      setLoading(true);
-      setError(null);
-      await deviceService.deleteDevice(deviceId);
-      setDevices(prev => prev.filter(device => device.id !== deviceId));
-      return true;
-    } catch (err) {
-      setError(err.message || 'Failed to delete device');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Get devices by status
-  const getDevicesByStatus = useCallback((status) => {
-    return devices.filter(device => device.warrantyStatus === status);
-  }, [devices]);
-
-  const getDeviceById = useCallback((deviceId) => {
-    return devices.find(device => device.id === deviceId);
-  }, [devices]);
-
-  // Load devices on mount
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchDevices();
-    }
-  }, [isAuthenticated, fetchDevices]);
-
-  return {
-    devices,
-    documents, // ✨ EXPORT: Expose documents state
-    loading,
-    error,
-    fetchDevices,
-    createDevice,
-    updateDevice,
-    deleteDevice,
-    addMaintenanceRecord,
-    getDevicesByStatus,
-    getDeviceById,
-    fetchDocuments, // ✨ EXPORT: Expose new function
-    downloadDocument, 
-    uploadDocuments,// ✨ EXPORT: Expose new function
-  };
+// Opens a document's external fileUrl - not a backend call, just a helper
+// kept alongside the rest of the device data logic.
+export function openDocument(document) {
+  if (document?.fileUrl) {
+    window.open(document.fileUrl, '_blank', 'noopener,noreferrer');
+  } else {
+    console.warn('Document has no fileUrl to open:', document);
+  }
 }

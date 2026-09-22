@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useDeviceDetail } from '../hooks/useDeviceData';
+import {
+  useDeviceQuery,
+  useDocumentsQuery,
+  useUpdateDevice,
+  useDeleteDevice,
+  useUploadDocuments,
+  useAddMaintenanceRecord,
+  openDocument,
+} from '../hooks/useDevices';
 import { useFileUpload } from '../hooks/useFileUpload';
 
 // UI
@@ -25,8 +33,6 @@ import {
   Plus, Wrench as Tool, Calendar, DollarSign,
 } from 'lucide-react';
 
-import { useDevices } from '../hooks/useDevices';
-
 const TABS = ['Overview', 'Documents', 'Maintenance'];
 
 const statusConfig = {
@@ -42,14 +48,14 @@ const statusConfig = {
 
 function DeviceHeader({ device, onEditClick }) {
   const navigate = useNavigate();
-  const { deleteDevice } = useDevices();
+  const deleteDeviceMutation = useDeleteDevice();
   const normalizedStatusKey = (device.warrantyStatus || '').toLowerCase().replace(' ', '-');
   const status = statusConfig[normalizedStatusKey] || { label: 'Unknown', color: 'default' };
 
   const handleDelete = async () => {
     if (window.confirm(`Are you sure you want to delete ${device.name}? This action is irreversible.`)) {
       try {
-        await deleteDevice(device.id);
+        await deleteDeviceMutation.mutateAsync(device.id);
         navigate('/devices');
       } catch (error) {
         console.error('Failed to delete device:', error);
@@ -650,32 +656,34 @@ export function DeviceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const {
-    device,
-    documents,
-    loading,
-    error,
-    updateDevice,
-    uploadDocuments,
-    downloadDocument,
-  } = useDeviceDetail(id);
+  const { data: device, isLoading, error } = useDeviceQuery(id);
+  const { data: documents = [] } = useDocumentsQuery(id);
+  const updateDeviceMutation = useUpdateDevice(id);
+  const uploadDocumentsMutation = useUploadDocuments(id);
+  const addMaintenanceRecordMutation = useAddMaintenanceRecord(id);
 
   const [activeTab, setActiveTab] = useState(TABS[0]);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const handleSave = async (editedData) => {
-    await updateDevice(editedData);
+    await updateDeviceMutation.mutateAsync(editedData);
+    setIsEditDialogOpen(false);
   };
 
   const handleUpload = async (files) => {
     if (!id || files.length === 0) return;
-    await uploadDocuments(files);
+    await uploadDocumentsMutation.mutateAsync(files);
   };
 
-  // Placeholder until this is wired up in the hook
-  const addMaintenanceRecord = () => console.log('Add maintenance logic placeholder');
+  const handleAddMaintenanceRecord = async (record) => {
+    await addMaintenanceRecordMutation.mutateAsync(record);
+  };
 
-  if (loading) {
+  // Only the very first load (no cached device at all - see useDeviceQuery's
+  // initialData) shows a blocking spinner. If the user got here from
+  // /devices, the card data is already in cache and paints instantly while
+  // the full detail record loads quietly underneath.
+  if (isLoading && !device) {
     return (
       <div className="flex items-center justify-center h-full pt-20">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -687,7 +695,7 @@ export function DeviceDetail() {
     return (
       <div className="p-6 text-center">
         <h2 className="text-xl font-bold text-red-600 dark:text-red-400">Error</h2>
-        <p className="text-gray-600 dark:text-gray-300 mt-2">{error || 'Could not find the requested device.'}</p>
+        <p className="text-gray-600 dark:text-gray-300 mt-2">{error?.userMessage || error?.message || 'Could not find the requested device.'}</p>
         <Button onClick={() => navigate('/devices')} className="mt-4">Back to Devices</Button>
       </div>
     );
@@ -781,7 +789,7 @@ export function DeviceDetail() {
           <Card>
             <Card.Header><Card.Title className="text-gray-900 dark:text-white">Manage Documents</Card.Title></Card.Header>
             <Card.Content className="space-y-6">
-              <DocumentPreview documents={documents} onDocumentClick={downloadDocument} />
+              <DocumentPreview documents={documents} onDocumentClick={openDocument} />
               <div>
                 <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Add More Documents</h4>
                 <FileUploadZone onUpload={handleUpload} maxFiles={5} />
@@ -791,7 +799,7 @@ export function DeviceDetail() {
         )}
 
         {activeTab === 'Maintenance' && (
-          <MaintenanceHistory device={device} onAddRecord={addMaintenanceRecord} />
+          <MaintenanceHistory device={device} onAddRecord={handleAddMaintenanceRecord} />
         )}
       </div>
 

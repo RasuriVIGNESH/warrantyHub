@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Loader2, Trash2, Clock } from 'lucide-react';
-import { useDevices } from '../hooks/useDevices';
+import { Plus, Search, Trash2, Clock, RefreshCw } from 'lucide-react';
+import { useDevicesQuery, useDeleteDevice } from '../hooks/useDevices';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -23,6 +23,29 @@ const statusConfig = {
   'expiring-soon': { label: 'Expiring Soon', color: 'warning' },
   expired: { label: 'Expired', color: 'error' },
 };
+
+// 🔽 Local sub-component: skeleton placeholder shown while the device list
+// is loading for the very first time (no cache yet). Mirrors the real
+// DeviceCard's layout so there's no layout shift when data arrives.
+function DeviceCardSkeleton() {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-pulse">
+      <div className="p-5">
+        <div className="flex items-start justify-between">
+          <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+          <div className="w-16 h-5 bg-gray-200 dark:bg-gray-700 rounded-full" />
+        </div>
+        <div className="mt-4 space-y-2">
+          <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+        </div>
+      </div>
+      <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700/50">
+        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+      </div>
+    </div>
+  );
+}
 
 // 🔽 Local sub-component: only used on this page, so it lives here instead of its own file.
 function DeviceCard({ device, onDelete }) {
@@ -78,7 +101,8 @@ function DeviceCard({ device, onDelete }) {
 
 export function Devices() {
   const navigate = useNavigate();
-  const { devices, loading, error, deleteDevice } = useDevices();
+  const { data: devices = [], isLoading, isFetching, error } = useDevicesQuery();
+  const deleteDeviceMutation = useDeleteDevice();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
@@ -94,25 +118,25 @@ export function Devices() {
 
   const handleDelete = async (deviceId) => {
     try {
-      await deleteDevice(deviceId);
+      await deleteDeviceMutation.mutateAsync(deviceId);
       setDeleteConfirmation(null);
-    } catch (error) {
-      console.error('Failed to delete device:', error);
+    } catch (err) {
+      console.error('Failed to delete device:', err);
     }
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
   if (error) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="text-center"><h3 className="text-lg font-medium">Error loading devices</h3><p className="mt-1 text-sm text-gray-500">{error}</p></div></div>;
+    return <div className="flex items-center justify-center min-h-screen"><div className="text-center"><h3 className="text-lg font-medium">Error loading devices</h3><p className="mt-1 text-sm text-gray-500">{error.userMessage || error.message}</p></div></div>;
   }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
           Your Devices
+          {isFetching && !isLoading && (
+            <RefreshCw className="w-4 h-4 text-gray-400 animate-spin" aria-label="Refreshing" />
+          )}
         </h1>
         <Button onClick={() => navigate('/devices/new')} size="lg">
           <Plus className="w-5 h-5 mr-2" />
@@ -148,16 +172,32 @@ export function Devices() {
                 Are you sure you want to delete "{deleteConfirmation.name}"? This is irreversible.
               </p>
               <div className="flex justify-center gap-4">
-                <Button variant="outline" onClick={() => setDeleteConfirmation(null)} className="flex-1">Cancel</Button>
-                <Button variant="destructive" onClick={() => handleDelete(deleteConfirmation.id)} className="flex-1">Delete</Button>
+                <Button variant="outline" onClick={() => setDeleteConfirmation(null)} className="flex-1" disabled={deleteDeviceMutation.isPending}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => handleDelete(deleteConfirmation.id)}
+                  className="flex-1"
+                  isLoading={deleteDeviceMutation.isPending}
+                >
+                  Delete
+                </Button>
               </div>
             </div>
           </Card>
         </div>
       )}
 
-      {/* ✨ Modern Grid Layout ✨ */}
-      {filteredDevices.length > 0 ? (
+      {/* Skeleton grid: only for the very first load with an empty cache.
+          Point #5/#6 - if we already have cached devices (even stale), show
+          them immediately instead of a skeleton, and quietly refresh in the
+          background (see the small spinner next to the title above). */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <DeviceCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : filteredDevices.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredDevices.map(device => (
             <DeviceCard

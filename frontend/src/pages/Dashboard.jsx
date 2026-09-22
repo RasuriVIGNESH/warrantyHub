@@ -1,6 +1,6 @@
 import { useMemo } from 'react'; 
 import { useNavigate } from 'react-router-dom';
-import { useDevices } from '../hooks/useDevices';
+import { useDevicesQuery } from '../hooks/useDevices';
 import { Card } from '../components/ui/Card';
 import { NotificationDropdown } from '../components/ui/NotificationDropdown';
 import { getDeviceIcon } from '../utils/getDeviceIcon'; // ♻️ shared icon logic (was duplicated inline)
@@ -9,7 +9,8 @@ import {
   Shield,
   Clock,
   AlertTriangle,
-  ChevronRight
+  ChevronRight,
+  RefreshCw,
 } from 'lucide-react';
 
 // 🔽 Local sub-component: only used on this page, so it lives here instead of its own file.
@@ -39,7 +40,7 @@ function SpendingChart({ data }) {
 }
 
 export function Dashboard() {
-  const { devices, loading, error } = useDevices();
+  const { data: devices = [], isLoading, isFetching, error } = useDevicesQuery();
   const navigate = useNavigate();
   const normalizeStatus = (status) => (status || '').toLowerCase().replace(' ', '-');
 
@@ -63,7 +64,11 @@ export function Dashboard() {
   }, [devices]);
 
 
-  if (loading) {
+  // Only block on a spinner when there is truly nothing to show yet (first
+  // ever visit, empty cache). Once we have data - even stale data from a
+  // previous visit - we show it immediately and refresh quietly in the
+  // background (see the small spinner next to the title below).
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -79,7 +84,7 @@ export function Dashboard() {
             Error loading dashboard
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {error}
+            {error.userMessage || error.message}
           </p>
         </div>
       </div>
@@ -93,8 +98,11 @@ export function Dashboard() {
   return (
     <div className="p-6 space-y-8">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
           Dashboard
+          {isFetching && (
+            <RefreshCw className="w-4 h-4 text-gray-400 animate-spin" aria-label="Refreshing" />
+          )}
         </h1>
         <div className="flex items-center">
           <NotificationDropdown />

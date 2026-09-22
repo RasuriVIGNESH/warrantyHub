@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Maintenance Reminder</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+</head>
+<body>
+    <h1>Maintenance Reminder</h1>
+    <p>Hello <span th:text="${name}">User</span>,</p>
+
+    <p>This is a reminder about the upcoming maintenance for your device "<span th:text="${deviceName}">device</span>".</p>
+
+    <div style="background-color: #f5f5f5; padding: 15px; margin: 20px 0;">
+        <h3>Maintenance Details:</h3>
+        <p><strong>Date:</strong> <span th:text="${#temporals.format(maintenanceDate, 'MMMM dd, yyyy')}">January 1, 2026</span></p>
+        <p><strong>Type:</strong> <span th:text="${maintenanceType}">Regular Service</span></p>
+        <p><strong>Notes:</strong> <span th:text="${notes}">Additional information</span></p>
+    </div>
+
+    <p>Please make sure to:</p>
+    <ul>
+        <li>Schedule your appointment if not done already</li>
+        <li>Prepare any necessary documentation</li>
+        <li>Back up any data if applicable</li>
+    </ul>
+
+    <p>Log in to your WarrantyHub account to manage your maintenance schedule and device records.</p>
+
+    <p>Best regards,<br/>
+    WarrantyHub Team</p>
+</body>
+</html>
+
