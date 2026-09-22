@@ -32,7 +32,7 @@ export const AUTH_CONFIG = {
 // =============================================================================
 export const API_CONFIG = {
   // Base URL for API calls
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL,
   
   // Request timeout
   TIMEOUT: 30000, // 30 seconds
@@ -360,7 +360,7 @@ export const ENV = {
   IS_DEVELOPMENT: import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV === true,
   IS_PRODUCTION: import.meta.env.NODE_ENV === 'production' || import.meta.env.PROD === true,
   IS_TEST: import.meta.env.NODE_ENV === 'test',
-  API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+  API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
   GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
 };
 
