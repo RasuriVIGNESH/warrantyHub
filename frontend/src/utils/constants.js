@@ -3,6 +3,15 @@
  * Includes OAuth2 configuration, API settings, error messages, and more
  */
 
+const stripTrailingSlashes = (value) => value.replace(/\/+$/, '');
+
+// Vite exposes only VITE_* variables to browser code. Keep deployment-specific
+// URLs in .env files and never hard-code them in components or services.
+const API_BASE_URL = stripTrailingSlashes(import.meta.env.VITE_API_URL || '');
+const OAUTH2_REDIRECT_URI = import.meta.env.VITE_OAUTH2_REDIRECT_URI || '';
+const OAUTH_URL = `${API_BASE_URL}/oauth2/authorization/google`;
+const HEALTH_URL = `${API_BASE_URL}/api/auth/health`;
+
 // =============================================================================
 // AUTHENTICATION CONFIGURATION
 // =============================================================================
@@ -10,10 +19,10 @@ export const AUTH_CONFIG = {
   TOKEN_KEY: 'warrantyhub_accessToken',
   REFRESH_TOKEN_KEY: 'warrantyhub_refreshToken',
   USER_KEY: 'warrantyhub_user',
-  
+
   // Token expiration buffer (refresh token 5 minutes before actual expiry)
   TOKEN_REFRESH_BUFFER: 5 * 60 * 1000, // 5 minutes in milliseconds
-  
+
   // Authentication endpoints
   ENDPOINTS: {
     LOGIN: '/api/auth/login',
@@ -32,15 +41,16 @@ export const AUTH_CONFIG = {
 // =============================================================================
 export const API_CONFIG = {
   // Base URL for API calls
-  BASE_URL: import.meta.env.VITE_API_BASE_URL,
-  
+  BASE_URL: API_BASE_URL,
+  HEALTH_URL,
+
   // Request timeout
   TIMEOUT: 30000, // 30 seconds
-  
+
   // Retry configuration
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000, // 1 second
-  
+
   // Headers
   DEFAULT_HEADERS: {
     'Content-Type': 'application/json',
@@ -55,15 +65,16 @@ export const OAUTH2_CONFIG = {
   // Google OAuth2 settings
   GOOGLE: {
     CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-    AUTHORIZATION_URL: `${API_CONFIG.BASE_URL}/oauth2/authorization/google`,
+    AUTHORIZATION_URL: OAUTH_URL,
+    REDIRECT_URI: OAUTH2_REDIRECT_URI,
     SCOPES: ['openid', 'profile', 'email'],
   },
-  
+
   // OAuth2 flow settings
   CALLBACK_PATH: '/oauth2/redirect',
   REDIRECT_PATH_KEY: 'oauth2_redirect_path',
   SUCCESS_REDIRECT: '/dashboard',
-  
+
   // URL parameters for OAuth2 callback
   URL_PARAMS: {
     TOKEN: 'token',
@@ -72,7 +83,7 @@ export const OAUTH2_CONFIG = {
     ERROR: 'error',
     MESSAGE: 'message',
   },
-  
+
   // OAuth2 timeout settings
   CALLBACK_TIMEOUT: 10000, // 10 seconds
   AUTH_STATE_CHECK_INTERVAL: 100, // 100ms
@@ -88,29 +99,29 @@ export const ERROR_MESSAGES = {
   FORBIDDEN: 'You do not have permission to access this resource.',
   INVALID_CREDENTIALS: 'Invalid email or password. Please try again.',
   ACCOUNT_LOCKED: 'Your account has been locked. Please contact support.',
-  
+
   // Network errors
   NETWORK: 'Network error. Please check your connection and try again.',
   TIMEOUT: 'Request timed out. Please try again.',
   SERVER_ERROR: 'Server error. Please try again later.',
-  
+
   // Validation errors
   REQUIRED_FIELD: 'This field is required.',
   INVALID_EMAIL: 'Please enter a valid email address.',
   PASSWORD_TOO_SHORT: 'Password must be at least 6 characters long.',
   PASSWORDS_DONT_MATCH: 'Passwords do not match.',
-  
+
   // Resource errors
   NOT_FOUND: 'The requested resource was not found.',
   ALREADY_EXISTS: 'An account with this email already exists.',
-  
+
   // OAuth2 specific errors
   OAUTH2_FAILED: 'Google authentication failed. Please try again.',
   OAUTH2_TOKEN_MISSING: 'Authentication failed - no token received from Google.',
   OAUTH2_STATE_TIMEOUT: 'Authentication process took too long. Please try again.',
   OAUTH2_CANCELLED: 'Authentication was cancelled. Please try again.',
   OAUTH2_POPUP_BLOCKED: 'Popup was blocked. Please allow popups and try again.',
-  
+
   // Generic fallback
   GENERIC: 'An unexpected error occurred. Please try again.',
 };
@@ -139,19 +150,19 @@ export const ROUTES = {
   FORGOT_PASSWORD: '/forgot-password',
   RESET_PASSWORD: '/reset-password',
   OAUTH2_REDIRECT: '/oauth2/redirect',
-  
+
   // Main application routes
   HOME: '/',
   DASHBOARD: '/dashboard',
   PROFILE: '/profile',
   UPDATE_PROFILE: '/profile/edit',
-  
+
   // Device management routes
   DEVICES: '/devices',
   ADD_DEVICE: '/devices/new',
   DEVICE_DETAIL: '/devices/:id',
   EDIT_DEVICE: '/devices/:id/edit',
-  
+
   // Other routes
   NOT_FOUND: '/404',
   UNAUTHORIZED: '/401',
@@ -164,7 +175,7 @@ export const ROUTES = {
 export const UI_CONFIG = {
   // Loading states
   LOADING_DELAY: 200, // Show loading spinner after 200ms
-  
+
   // Toast notification settings
   TOAST: {
     DURATION: 4000, // 4 seconds
@@ -174,14 +185,14 @@ export const UI_CONFIG = {
     WARNING_ICON: '⚠️',
     INFO_ICON: 'ℹ️',
   },
-  
+
   // Modal settings
   MODAL: {
     OVERLAY_CLOSE: true,
     ESCAPE_CLOSE: true,
   },
-  
-  
+
+
   // Form settings
   FORM: {
     DEBOUNCE_DELAY: 300, // 300ms debounce for input validation
@@ -212,12 +223,12 @@ export const FILE_CONFIG = {
     ALL: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
   },
 
-  
-  
+
+
   // File size limits (in bytes)
   MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
   MAX_IMAGE_SIZE: 5 * 1024 * 1024, // 5MB
-  
+
   // Upload configuration
   CHUNK_SIZE: 1024 * 1024, // 1MB chunks for large file uploads
   MAX_CONCURRENT_UPLOADS: 3,
@@ -230,20 +241,20 @@ export const DEVICE_CONFIG = {
   // Device categories
   CATEGORIES: [
     'Electronics',
-    'Appliances', 
+    'Appliances',
     'Automotive',
     'Home & Garden',
     'Sports & Outdoors',
     'Other',
   ],
-  
+
   // Warranty status
   WARRANTY_STATUS: {
     ACTIVE: 'active',
     EXPIRED: 'expired',
     EXPIRING_SOON: 'expiring_soon',
   },
-  
+
   // Notification settings
   NOTIFICATION_DAYS: [7, 14, 30, 60, 90], // Days before warranty expiration
 };
@@ -253,10 +264,10 @@ export const DEVICE_CONFIG = {
 // =============================================================================
 export const DEBUG_CONFIG = {
   // Enable debug mode based on environment
-  ENABLED: import.meta.env.VITE_DEBUG_AUTH === 'true' || 
-           import.meta.env.NODE_ENV === 'development' || 
-           import.meta.env.DEV === true,
-  
+  ENABLED: import.meta.env.VITE_DEBUG_AUTH === 'true' ||
+      import.meta.env.NODE_ENV === 'development' ||
+      import.meta.env.DEV === true,
+
   // Debug categories
   LOG_API_REQUESTS: true,
   LOG_API_RESPONSES: true,
@@ -264,7 +275,7 @@ export const DEBUG_CONFIG = {
   LOG_OAUTH2_FLOW: true,
   LOG_NAVIGATION: false,
   LOG_COMPONENT_RENDERS: false,
-  
+
   // Console styling
   STYLES: {
     SUCCESS: 'color: #22c55e; font-weight: bold',
@@ -283,7 +294,7 @@ export const VALIDATION_RULES = {
     PATTERN: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     MAX_LENGTH: 255,
   },
-  
+
   PASSWORD: {
     MIN_LENGTH: 6,
     MAX_LENGTH: 128,
@@ -292,18 +303,18 @@ export const VALIDATION_RULES = {
     REQUIRE_NUMBERS: false,
     REQUIRE_SPECIAL_CHARS: false,
   },
-  
+
   NAME: {
     MIN_LENGTH: 1,
     MAX_LENGTH: 100,
     PATTERN: /^[a-zA-Z\s'-]+$/,
   },
-  
+
   DEVICE_NAME: {
     MIN_LENGTH: 1,
     MAX_LENGTH: 100,
   },
-  
+
   SERIAL_NUMBER: {
     MAX_LENGTH: 50,
   },
@@ -317,15 +328,15 @@ export const STORAGE_KEYS = {
   ACCESS_TOKEN: AUTH_CONFIG.TOKEN_KEY,
   REFRESH_TOKEN: AUTH_CONFIG.REFRESH_TOKEN_KEY,
   USER_PROFILE: AUTH_CONFIG.USER_KEY,
-  
+
   // OAuth2
   OAUTH2_REDIRECT_PATH: OAUTH2_CONFIG.REDIRECT_PATH_KEY,
-  
+
   // User preferences
   THEME: 'theme',
   LANGUAGE: 'language',
   DASHBOARD_LAYOUT: 'dashboard_layout',
-  
+
   // Application state
   LAST_ACTIVE_TAB: 'last_active_tab',
   SIDEBAR_COLLAPSED: 'sidebar_collapsed',
@@ -360,7 +371,10 @@ export const ENV = {
   IS_DEVELOPMENT: import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV === true,
   IS_PRODUCTION: import.meta.env.NODE_ENV === 'production' || import.meta.env.PROD === true,
   IS_TEST: import.meta.env.NODE_ENV === 'test',
-  API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  API_BASE_URL,
+  OAUTH_URL,
+  HEALTH_URL,
+  OAUTH2_REDIRECT_URI,
   GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
 };
 
@@ -375,7 +389,7 @@ export const UTILS = {
     if (error?.response?.data?.message) return error.response.data.message;
     return ERROR_MESSAGES.GENERIC;
   },
-  
+
   // Check if token is expired
   isTokenExpired: (token) => {
     try {
@@ -386,7 +400,7 @@ export const UTILS = {
       return true;
     }
   },
-  
+
   // Get time until token expires
   getTokenExpiryTime: (token) => {
     try {
@@ -397,18 +411,18 @@ export const UTILS = {
       return 0;
     }
   },
-  
+
   // Debug logger
   log: (level, message, ...args) => {
     if (!DEBUG_CONFIG.ENABLED) return;
-    
+
     const style = DEBUG_CONFIG.STYLES[level.toUpperCase()] || '';
     const timestamp = new Date().toLocaleTimeString();
-    
+
     console.log(
-      `%c[${timestamp}] ${level.toUpperCase()}: ${message}`,
-      style,
-      ...args
+        `%c[${timestamp}] ${level.toUpperCase()}: ${message}`,
+        style,
+        ...args
     );
   },
 };
