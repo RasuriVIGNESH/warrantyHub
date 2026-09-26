@@ -115,7 +115,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         try {
             String token = tokenProvider.generateToken(authentication);
             String refreshToken = createRefreshTokenForOAuth2User(authentication);
-            return UriComponentsBuilder.fromUriString(defaultFrontendUrl + "/oauth2/callback")
+            return UriComponentsBuilder.fromUriString(defaultFrontendUrl + "/oauth2/redirect")
                     .queryParam("token", token)
                     .queryParam("refreshToken", refreshToken)
                     .queryParam("success", "true")

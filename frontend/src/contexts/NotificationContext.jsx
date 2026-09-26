@@ -1,14 +1,17 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import deviceService from '../services/deviceService';
+import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext();
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   // Check for expiring warranties and add notifications
   useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
     const checkWarranties = async () => {
       try {
         // Get devices from API
@@ -76,13 +79,13 @@ export function NotificationProvider({ children }) {
         console.error('Error checking warranties:', error);
       }
     };
-    
+
     checkWarranties();
-    
+
     // Check for new notifications daily
     const interval = setInterval(checkWarranties, 24 * 60 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [authLoading, isAuthenticated]);
   
   // Add a new notification
   const addNotification = (notification) => {

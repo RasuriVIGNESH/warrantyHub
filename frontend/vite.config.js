@@ -24,9 +24,9 @@ export default defineConfig(({ command, mode }) => {
           rewrite: (path) => path.replace(/^\/api/, ''),
         }
       },
-      hmr: {
-        clientPort: 443
-      },
+      hmr: process.env.VITE_REMOTE_SANDBOX === 'true'
+          ? { clientPort: 443 }
+          : true,
       allowedHosts: ['3000-iv0n35psf1vp1akvm8hva-19f10cf5.manusvm.computer']
     },
     // Define env variables to expose to the client
