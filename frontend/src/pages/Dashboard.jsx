@@ -1,210 +1,469 @@
-import { useMemo } from 'react'; 
-import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ChevronRight, ClipboardCheck, FileText, Plus, ShieldCheck, Wrench } from 'lucide-react';
+import { useDashboardQuery } from '../hooks/useDashboard';
 import { useDevicesQuery } from '../hooks/useDevices';
+import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { NotificationDropdown } from '../components/ui/NotificationDropdown';
-import { getDeviceIcon } from '../utils/getDeviceIcon'; // ♻️ shared icon logic (was duplicated inline)
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { 
-  Shield,
-  Clock,
-  AlertTriangle,
-  ChevronRight,
-  RefreshCw,
-} from 'lucide-react';
+import { Badge } from '../components/ui/Badge';
+import { getDeviceIcon } from '../utils/getDeviceIcon';
 
-// 🔽 Local sub-component: only used on this page, so it lives here instead of its own file.
-function SpendingChart({ data }) {
-  const formatCurrency = (value) => `₹${value.toLocaleString('en-IN')}`;
+function getAccent() {
+  // 2. Royal Navy — trustworthy, Harvard, Ralph Lauren
+  // return '#1B3A5C';
+
+  // 6. Deep Teal — refined modern, coastal luxury
+  return '#1A4D5C';
+}
+
+const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+const date = value => new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const status = {
+  active: { label: 'Protected', color: 'success' },
+  'expiring-soon': { label: 'Expiring soon', color: 'warning' },
+  expired: { label: 'Expired', color: 'danger' }
+};
+
+// ✅ FIXED: Added dark mode classes to all tone variants
+function Metric({ label, value, detail, icon: Icon, tone = 'blue', accent }) {
+  const tones = {
+    blue: 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800',
+    green: 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800',
+    amber: 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800',
+    slate: 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'
+  };
 
   return (
-    <div style={{ width: '100%', height: 300 }}>
-      <ResponsiveContainer>
-        <BarChart
-          data={data}
-          margin={{ top: 5, right: 20, left: 30, bottom: 5 }}
+      <div className={`border rounded-2xl p-5 transition-all duration-300 hover:shadow-md ${tones[tone]}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium mb-2">{label}</p>
+            <p className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{value}</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{detail}</p>
+          </div>
+          <div
+              className="rounded-xl border p-3 transition-colors"
+              style={{
+                borderColor: `${accent}30`,
+                backgroundColor: `${accent}08`
+              }}
+          >
+            <Icon
+                className="h-5 w-5 transition-colors"
+                style={{ color: accent }}
+            />
+          </div>
+        </div>
+      </div>
+  );
+}
+
+function AttentionRow({ device, message, action, accent }) {
+  const Icon = getDeviceIcon(device);
+  const isExpired = device.warrantyStatus === 'expired';
+
+  return (
+      <Link
+          to={`/devices/${device.id}`}
+          className="group flex items-center gap-4 rounded-xl border border-slate-200 dark:border-slate-700 p-4 transition-all duration-300 hover:shadow-sm"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = accent;
+            e.currentTarget.style.backgroundColor = `${accent}08`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '';
+            e.currentTarget.style.backgroundColor = '';
+          }}
+      >
+        <div
+            className="rounded-xl p-3 transition-colors"
+            style={{
+              backgroundColor: isExpired ? '#fef2f2' : '#fffbeb',
+              color: isExpired ? '#dc2626' : '#d97706'
+            }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.3)" />
-          <XAxis dataKey="year" />
-          <YAxis tickFormatter={formatCurrency} />
-          <Tooltip
-            formatter={(value) => [formatCurrency(value), 'Spending']}
-            cursor={{ fill: 'rgba(128, 128, 128, 0.1)' }}
-          />
-          <Legend />
-          <Bar dataKey="spending" fill="#3b82f6" name="Total Spending" />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <p className="truncate font-medium text-slate-900 dark:text-slate-100">{device.name}</p>
+            <Badge color={isExpired ? 'danger' : 'warning'} size="sm">
+              {status[device.warrantyStatus]?.label}
+            </Badge>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{message}</p>
+        </div>
+        <span
+            className="hidden text-sm font-medium transition-colors sm:block"
+            style={{ color: accent }}
+        >
+        {action}
+      </span>
+        <ChevronRight
+            className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-0.5"
+            onMouseEnter={(e) => (e.currentTarget.style.color = accent)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '')}
+        />
+      </Link>
   );
 }
 
 export function Dashboard() {
-  const { data: devices = [], isLoading, isFetching, error } = useDevicesQuery();
   const navigate = useNavigate();
-  const normalizeStatus = (status) => (status || '').toLowerCase().replace(' ', '-');
+  const { data: dashboard, isLoading: isDashboardLoading } = useDashboardQuery();
+  const { data: devices = [], isLoading: isDevicesLoading } = useDevicesQuery();
+  const isLoading = isDashboardLoading || isDevicesLoading;
 
-  // This data processing logic for the chart is already correct
-  const spendingData = useMemo(() => {
-    if (!devices || devices.length === 0) return [];
+  const accent = getAccent();
 
-    const spendingByYear = devices.reduce((acc, device) => {
-      const year = new Date(device.purchaseDate).getFullYear();
-      const price = device.purchasePrice || 0;
-      
-      if (!acc[year]) {
-        acc[year] = { year: year.toString(), spending: 0 };
-      }
-      acc[year].spending += price;
-      
-      return acc;
-    }, {});
+  const upcoming = useMemo(
+      () =>
+          devices
+              .filter(device => device.daysRemaining != null && device.daysRemaining >= 0)
+              .sort((a, b) => a.daysRemaining - b.daysRemaining),
+      [devices]
+  );
 
-    return Object.values(spendingByYear).sort((a, b) => a.year.localeCompare(b.year));
-  }, [devices]);
+  const attention = useMemo(
+      () =>
+          devices
+              .filter(device =>
+                  device.daysRemaining < 0 ||
+                  device.warrantyStatus === 'expiring-soon' ||
+                  device.documents.length === 0
+              )
+              .sort((a, b) => (a.daysRemaining ?? 0) - (b.daysRemaining ?? 0)),
+      [devices]
+  );
 
-
-  // Only block on a spinner when there is truly nothing to show yet (first
-  // ever visit, empty cache). Once we have data - even stale data from a
-  // previous visit - we show it immediately and refresh quietly in the
-  // background (see the small spinner next to the title below).
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-            Error loading dashboard
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {error.userMessage || error.message}
-          </p>
+        <div className="space-y-6 p-5 sm:p-8">
+          <div className="h-28 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700" />
+          <div className="grid gap-4 md:grid-cols-4">
+            {[1, 2, 3, 4].map(item => (
+                <div key={item} className="h-32 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700" />
+            ))}
+          </div>
+          <div className="h-72 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700" />
         </div>
-      </div>
     );
   }
 
-  const activeDevices = devices.filter(d => normalizeStatus(d.warrantyStatus) === 'active').length;
-  const expiringSoon = devices.filter(d => normalizeStatus(d.warrantyStatus) === 'expiring-soon').length;
-  const expiredDevices = devices.filter(d => normalizeStatus(d.warrantyStatus) === 'expired').length;
+  const nextDevice = upcoming[0];
 
   return (
-    <div className="p-6 space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          Dashboard
-          {isFetching && (
-            <RefreshCw className="w-4 h-4 text-gray-400 animate-spin" aria-label="Refreshing" />
-          )}
-        </h1>
-        <div className="flex items-center">
-          <NotificationDropdown />
-        </div>
-      </div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 px-4 py-6 sm:px-8 sm:py-8 transition-colors duration-300">
+        <div className="mx-auto max-w-7xl space-y-6">
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/80 dark:to-emerald-900/70 border-none shadow-lg hover:shadow-xl transition-all duration-300 dark:shadow-emerald-900/10">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-green-800 dark:text-white">Active Warranties</h3>
-              <div className="p-2 bg-white/80 dark:bg-white/10 rounded-lg shadow-sm backdrop-blur-sm"><Shield className="w-6 h-6 text-green-600 dark:text-white" /></div>
-            </div>
-            <p className="text-4xl font-bold text-green-900 dark:text-white">{activeDevices}</p>
-            <p className="mt-2 text-sm text-green-700 dark:text-gray-200">Protected devices</p>
-          </div>
-        </Card>
-        <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-amber-900/80 dark:to-yellow-900/70 border-none shadow-lg hover:shadow-xl transition-all duration-300 dark:shadow-amber-900/10">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-yellow-800 dark:text-white">Expiring Soon</h3>
-              <div className="p-2 bg-white/80 dark:bg-white/10 rounded-lg shadow-sm backdrop-blur-sm"><Clock className="w-6 h-6 text-yellow-600 dark:text-white" /></div>
-            </div>
-            <p className="text-4xl font-bold text-yellow-900 dark:text-white">{expiringSoon}</p>
-            <p className="mt-2 text-sm text-yellow-700 dark:text-gray-200">Need attention soon</p>
-          </div>
-        </Card>
-        <Card className="bg-gradient-to-br from-red-50 to-red-100 dark:from-rose-900/80 dark:to-red-900/70 border-none shadow-lg hover:shadow-xl transition-all duration-300 dark:shadow-rose-900/10">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-red-800 dark:text-white">Expired</h3>
-              <div className="p-2 bg-white/80 dark:bg-white/10 rounded-lg shadow-sm backdrop-blur-sm"><AlertTriangle className="w-6 h-6 text-red-600 dark:text-white" /></div>
-            </div>
-            <p className="text-4xl font-bold text-red-900 dark:text-white">{expiredDevices}</p>
-            <p className="mt-2 text-sm text-red-700 dark:text-gray-200">Require immediate action</p>
-          </div>
-        </Card>
-      </div>
-      
-      
-
-      {/* Recent Devices */}
-      <Card className="bg-white dark:bg-transparent border dark:border-gray-700">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Recent Devices</h2>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {devices.slice(0, 5).map(device => {
-              const DeviceIcon = getDeviceIcon(device);
-              return (
-                <div 
-                  key={device.id} 
-                  className="py-4 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors duration-150 rounded-md px-2 -mx-2"
-                  onClick={() => navigate(`/devices/${device.id}`)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
-                        <DeviceIcon className="w-8 h-8 text-gray-600 dark:text-gray-300" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                          {device.name || `${device.manufacturer} - ${device.model}`}
-                        </h3>
-                        <div className="mt-1 flex items-center gap-3">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            device.warrantyStatus === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' :
-                            device.warrantyStatus === 'expiring-soon' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' :
-                            'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
-                          }`}>
-                            {device.warrantyStatus.replace('-', ' ').charAt(0).toUpperCase() + device.warrantyStatus.slice(1).replace('-', ' ')}
-                          </span>
-                          <span className="text-sm text-gray-500 dark:text-gray-400">
-                            Expires: {new Date(device.warrantyEndDate).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
+          {/* Hero Card - Next Important Date */}
+          {nextDevice ? (
+              <div
+                  className="rounded-3xl p-6 sm:p-8 text-white shadow-lg transition-all duration-300 hover:shadow-xl"
+                  style={{ backgroundColor: accent }}
+              >
+                <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 text-sm font-medium opacity-80 mb-3">
+                      <CalendarClock className="h-4 w-4" />
+                      Next Important Date
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 self-center" />
+                    <h2 className="text-2xl sm:text-3xl font-semibold mb-3">
+                      {nextDevice.name} needs a review
+                    </h2>
+                    <p className="opacity-80 max-w-xl text-sm sm:text-base">
+                      Warranty ends on {date(nextDevice.warrantyEndDate)}. Check your documents or start a claim.
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-4 rounded-2xl bg-white/10 backdrop-blur-sm p-5">
+                    <div className="text-center">
+                      <p className="text-4xl font-bold">{Math.max(nextDevice.daysRemaining, 0)}</p>
+                      <p className="text-xs uppercase tracking-wide opacity-80 mt-1">days left</p>
+                    </div>
+                    <Link
+                        to={`/devices/${nextDevice.id}`}
+                        className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold transition-all hover:scale-105"
+                        style={{ color: accent }}
+                    >
+                      Review Device
+                    </Link>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      </Card>
-      {/* ✨ ADDED: Spending Chart Section */}
-      <Card className="bg-white dark:bg-transparent border dark:border-gray-700">
-        <Card.Header>
-          <Card.Title className="text-xl font-semibold text-gray-900 dark:text-white">Spending Over Time</Card.Title>
-          <Card.Description>Total purchase price of devices added each year.</Card.Description>
-        </Card.Header>
-        <Card.Content>
-          {spendingData.length > 0 ? (
-            <SpendingChart data={spendingData} />
+              </div>
           ) : (
-            <div className="text-center py-12">
-              <p className="text-gray-500 dark:text-gray-400">No spending data available. Add devices with a purchase price to see this chart.</p>
-            </div>
+              <div className="rounded-3xl border-2 border-dashed border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-8">
+                <div className="flex items-center gap-4">
+                  <div className="rounded-full bg-green-100 dark:bg-green-800 p-3">
+                    <CheckCircle2 className="h-8 w-8 text-green-700 dark:text-green-300" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-green-900 dark:text-green-100 mb-1">
+                      You're all set
+                    </h2>
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      No warranties expiring in the next 90 days.
+                    </p>
+                  </div>
+                </div>
+              </div>
           )}
-        </Card.Content>
-      </Card>
-    </div>
+
+          {/* Metrics Grid */}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric
+                label="Protected Value"
+                value={currency.format(dashboard?.stats.protectedValue || 0)}
+                detail={`${dashboard?.stats.totalDevices || 0} tracked items`}
+                icon={ShieldCheck}
+                tone="blue"
+                accent={accent}
+            />
+            <Metric
+                label="Active Coverage"
+                value={dashboard?.stats.activeCoverage || 0}
+                detail="Devices currently protected"
+                icon={CheckCircle2}
+                tone="green"
+                accent={accent}
+            />
+            <Metric
+                label="Needs Attention"
+                value={(dashboard?.stats.expiringSoon || 0) + (dashboard?.stats.expired || 0)}
+                detail="Expiring or expired"
+                icon={AlertTriangle}
+                tone="amber"
+                accent={accent}
+            />
+            <Metric
+                label="Record Completeness"
+                value={`${dashboard?.stats.recordCompleteness || 0}%`}
+                detail={`${dashboard?.stats.missingDocuments || 0} missing documents`}
+                icon={ClipboardCheck}
+                tone="slate"
+                accent={accent}
+            />
+          </div>
+
+          {/* Main Content Grid */}
+          <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+
+            {/* Needs Attention */}
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 transition-colors duration-300">
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    Needs Your Attention
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Small actions now prevent expensive surprises later.
+                  </p>
+                </div>
+                <Link
+                    to="/devices"
+                    className="text-sm font-medium transition-colors hover:underline underline-offset-4"
+                    style={{ color: accent }}
+                >
+                  View all
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {attention.length ? (
+                    attention.slice(0, 4).map(device => (
+                        <AttentionRow
+                            key={device.id}
+                            device={device}
+                            message={
+                              device.daysRemaining < 0
+                                  ? `Coverage expired ${Math.abs(device.daysRemaining)} days ago`
+                                  : device.documents.length === 0
+                                      ? 'Attach proof of purchase to complete this record'
+                                      : 'Review device health and coverage'
+                            }
+                            action={device.daysRemaining < 0 ? 'Review options' : 'Take action'}
+                            accent={accent}
+                        />
+                    ))
+                ) : (
+                    <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-8 text-center">
+                      <CheckCircle2 className="mx-auto h-8 w-8 text-green-600 dark:text-green-400" />
+                      <p className="mt-3 font-medium text-slate-900 dark:text-slate-100">
+                        Nothing needs attention
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Your records are in good shape.
+                      </p>
+                    </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 transition-colors duration-300">
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    Quick Actions
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Keep your records useful and up to date.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <Link
+                    to="/devices/new"
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4 transition-all duration-300 hover:shadow-sm group"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = accent;
+                      e.currentTarget.style.backgroundColor = `${accent}08`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '';
+                      e.currentTarget.style.backgroundColor = '';
+                    }}
+                >
+                  <div
+                      className="rounded-lg p-2 transition-colors"
+                      style={{ backgroundColor: `${accent}10` }}
+                  >
+                    <Plus className="h-5 w-5" style={{ color: accent }} />
+                  </div>
+                  <span className="flex-1">
+                  <b className="block text-sm text-slate-900 dark:text-slate-100">Add a device</b>
+                  <small className="text-xs text-slate-500 dark:text-slate-400">Start with a receipt or manual entry</small>
+                </span>
+                  <ArrowRight
+                      className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-1"
+                      onMouseEnter={(e) => (e.currentTarget.style.color = accent)}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = '')}
+                  />
+                </Link>
+
+                <Link
+                    to="/claims"
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4 transition-all duration-300 hover:shadow-sm group"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = accent;
+                      e.currentTarget.style.backgroundColor = `${accent}08`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '';
+                      e.currentTarget.style.backgroundColor = '';
+                    }}
+                >
+                  <div
+                      className="rounded-lg p-2 transition-colors"
+                      style={{ backgroundColor: `${accent}10` }}
+                  >
+                    <Wrench className="h-5 w-5" style={{ color: accent }} />
+                  </div>
+                  <span className="flex-1">
+                  <b className="block text-sm text-slate-900 dark:text-slate-100">Start a claim</b>
+                  <small className="text-xs text-slate-500 dark:text-slate-400">Prepare the right information</small>
+                </span>
+                  <ArrowRight
+                      className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-1"
+                      onMouseEnter={(e) => (e.currentTarget.style.color = accent)}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = '')}
+                  />
+                </Link>
+
+                <Link
+                    to="/reports"
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4 transition-all duration-300 hover:shadow-sm group"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = accent;
+                      e.currentTarget.style.backgroundColor = `${accent}08`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '';
+                      e.currentTarget.style.backgroundColor = '';
+                    }}
+                >
+                  <div
+                      className="rounded-lg p-2 transition-colors"
+                      style={{ backgroundColor: `${accent}10` }}
+                  >
+                    <FileText className="h-5 w-5" style={{ color: accent }} />
+                  </div>
+                  <span className="flex-1">
+                  <b className="block text-sm text-slate-900 dark:text-slate-100">Create a report</b>
+                  <small className="text-xs text-slate-500 dark:text-slate-400">For insurance, moving, or resale</small>
+                </span>
+                  <ArrowRight
+                      className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-1"
+                      onMouseEnter={(e) => (e.currentTarget.style.color = accent)}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = '')}
+                  />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Upcoming Coverage */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 transition-colors duration-300">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  Upcoming Coverage
+                </h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Your next 90 days at a glance.
+                </p>
+              </div>
+              <Link
+                  to="/devices"
+                  className="text-sm font-medium transition-colors hover:underline underline-offset-4"
+                  style={{ color: accent }}
+              >
+                Manage devices
+              </Link>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {upcoming.slice(0, 3).map(device => (
+                  <Link
+                      key={device.id}
+                      to={`/devices/${device.id}`}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 transition-all duration-300 hover:shadow-md group"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = accent;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '';
+                      }}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="font-medium text-slate-900 dark:text-slate-100">{device.name}</p>
+                      <Badge
+                          color={device.daysRemaining <= 30 ? 'warning' : 'success'}
+                          size="sm"
+                      >
+                        {device.daysRemaining} days
+                      </Badge>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700 mb-3">
+                      <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.max(8, Math.min(100, 100 - device.daysRemaining))}%`,
+                            backgroundColor: device.daysRemaining <= 30 ? '#f59e0b' : accent
+                          }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Expires {date(device.warrantyEndDate)}
+                    </p>
+                  </Link>
+              ))}
+              {!upcoming.length && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 md:col-span-3 text-center py-8">
+                    No upcoming expiries.
+                  </p>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
   );
 }

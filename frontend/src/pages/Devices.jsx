@@ -1,220 +1,320 @@
-// src/pages/Devices.jsx
-
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Clock, RefreshCw } from 'lucide-react';
-import { useDevicesQuery, useDeleteDevice } from '../hooks/useDevices';
+import { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AlertCircle, CalendarClock, CheckCircle2, Filter, Package, Plus, Search, ShieldCheck, SlidersHorizontal, X } from 'lucide-react';
+import { useDevicesQuery } from '../hooks/useDevices';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
 import { Badge } from '../components/ui/Badge';
 import { getDeviceIcon } from '../utils/getDeviceIcon';
 
-const DEVICE_STATUS_OPTIONS = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'active', label: 'Active' },
-  { value: 'expiring-soon', label: 'Expiring Soon' },
-  { value: 'expired', label: 'Expired' },
-];
-
-const statusConfig = {
-  active: { label: 'Active', color: 'success' },
-  'expiring-soon': { label: 'Expiring Soon', color: 'warning' },
-  expired: { label: 'Expired', color: 'error' },
+/* ═══════════════════════════════════════════════════════════════════════════
+   🎨  COLOR FUNCTION — CHANGE THE COLOR HERE
+   ─────────────────────────────────────────────────────────────────────────
+   Just return the color you want. Pick one from the presets below, or
+   enter any hex code. The entire page will update automatically.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function getAccent() {
+  return '#1A4D5C'; // Deep Teal
+}
+/* ═══════════════════════════════════════════════════════════════════════════ */
+const status = {
+    active: { label: 'Protected', color: 'success' },
+    'expiring-soon': { label: 'Expiring soon', color: 'warning' },
+    expired: { label: 'Expired', color: 'danger' },
+    pending: { label: 'Pending', color: 'secondary' },
 };
 
-// 🔽 Local sub-component: skeleton placeholder shown while the device list
-// is loading for the very first time (no cache yet). Mirrors the real
-// DeviceCard's layout so there's no layout shift when data arrives.
-function DeviceCardSkeleton() {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-pulse">
-      <div className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-          <div className="w-16 h-5 bg-gray-200 dark:bg-gray-700 rounded-full" />
-        </div>
-        <div className="mt-4 space-y-2">
-          <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-        </div>
-      </div>
-      <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700/50">
-        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
-      </div>
-    </div>
-  );
-}
+const formatDate = value =>
+    new Date(value).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
 
-// 🔽 Local sub-component: only used on this page, so it lives here instead of its own file.
-function DeviceCard({ device, onDelete }) {
-  const navigate = useNavigate();
-  const DeviceIcon = getDeviceIcon(device);
-  const normalizedStatusKey = (device.warrantyStatus || '').toLowerCase().replace(' ', '-');
-  const status = statusConfig[normalizedStatusKey] || { label: 'Unknown', color: 'default' };
+function DeviceCard({ device, accent }) {
+  const Icon = getDeviceIcon(device);
+  const complete =
+      device.documents.length > 0 && device.serialNumber && device.warrantyEndDate;
 
-  const handleCardClick = () => {
-    navigate(`/devices/${device.id}`);
-  };
+  const isExpired = device.daysRemaining < 0;
+  const isExpiringSoon = device.daysRemaining >= 0 && device.daysRemaining <= 45;
 
-  const handleDeleteClick = (e) => {
-    e.stopPropagation(); // Prevent navigation when clicking delete
-    onDelete(device);
-  };
+  // Progress bar color: red for expired, amber for expiring soon, accent otherwise
+  const barColor = isExpired ? '#dc2626' : isExpiringSoon ? '#d97706' : accent;
+  const daysColor = isExpired
+      ? '#dc2626'
+      : isExpiringSoon
+          ? '#d97706'
+          : '#0f172a'; // slate-900
 
   return (
-    <div className="group relative bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
-      <div onClick={handleCardClick} className="cursor-pointer">
-        <div className="p-5">
-          <div className="flex items-start justify-between">
-            <div className="p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
-              <DeviceIcon className="w-8 h-8 text-gray-600 dark:text-gray-300" />
-            </div>
-            <Badge color={status.color} className="text-xs">{status.label}</Badge>
+      <Link
+          to={`/devices/${device.id}`}
+          className="group block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/50"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = accent;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '';
+          }}
+      >
+        {/* Top row: Icon + Status */}
+        <div className="flex items-start justify-between gap-3">
+          <div
+              className="rounded-xl p-3 transition-colors"
+              style={{
+                backgroundColor: `${accent}10`,
+                color: accent,
+              }}
+          >
+            <Icon className="h-6 w-6" />
           </div>
-          <div className="mt-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate" title={device.name}>
-              {device.name || 'Unnamed Device'}
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {device.manufacturer || 'N/A'}
-            </p>
+          <Badge
+              color={status[device.warrantyStatus]?.color || 'secondary'}
+              size="sm"
+          >
+            {status[device.warrantyStatus]?.label}
+          </Badge>
+        </div>
+
+        {/* Title + Manufacturer */}
+        <div className="mt-5">
+          <h2 className="truncate text-lg font-semibold text-slate-950 dark:text-slate-100">
+            {device.name}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {device.manufacturer} · {device.model}
+          </p>
+        </div>
+
+        {/* Warranty info */}
+        <div className="mt-5 space-y-3">
+          <div className="flex items-center justify-between text-sm">
+          <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+            <CalendarClock className="h-4 w-4" />
+            Warranty
+          </span>
+            <span className="font-medium" style={{ color: isExpired || isExpiringSoon ? daysColor : (document.documentElement.classList.contains('dark') ? '#7FB8A0' : '#0f172a') }}>
+            {isExpired
+                ? `${Math.abs(device.daysRemaining)} days ago`
+                : `${device.daysRemaining} days left`}
+          </span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+            <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.max(
+                      6,
+                      Math.min(100, isExpired ? 100 : 100 - device.daysRemaining)
+                  )}%`,
+                  backgroundColor: barColor,
+                }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-xs">
+          <span className="text-slate-400 dark:text-slate-500">
+            Ends {formatDate(device.warrantyEndDate)}
+          </span>
+            <span
+                className="flex items-center gap-1"
+                style={{ color: complete ? '#16a34a' : '#d97706' }}
+            >
+            {complete ? (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+            ) : (
+                <AlertCircle className="h-3.5 w-3.5" />
+            )}
+              {complete ? 'Complete record' : 'Needs details'}
+          </span>
           </div>
         </div>
-        <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700/50">
-          <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-            <Clock className="w-4 h-4 mr-2" />
-            <span>Expires: {new Date(device.warrantyEndDate).toLocaleDateString()}</span>
-          </div>
-        </div>
-      </div>
-      {/* Hover Actions */}
-      <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-        <Button size="icon" variant="ghost" onClick={handleDeleteClick} className="w-8 h-8">
-          <Trash2 className="w-4 h-4 text-red-500" />
-        </Button>
-      </div>
-    </div>
+      </Link>
   );
 }
 
 export function Devices() {
   const navigate = useNavigate();
-  const { data: devices = [], isLoading, isFetching, error } = useDevicesQuery();
-  const deleteDeviceMutation = useDeleteDevice();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [deleteConfirmation, setDeleteConfirmation] = useState(null);
+    const { data: devices = [], isLoading } = useDevicesQuery();
+    const [query, setQuery] = useState('');
+    const [filter, setFilter] = useState('all');
+    const [category, setCategory] = useState('all');
 
-  const filteredDevices = devices.filter(device => {
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = (device.name || '').toLowerCase().includes(searchLower) ||
-      (device.manufacturer || '').toLowerCase().includes(searchLower) ||
-      (device.model || '').toLowerCase().includes(searchLower);
-    const matchesStatus = statusFilter === 'all' || device.warrantyStatus === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+    const accent = getAccent();
+  const categories = [...new Set(devices.map((device) => device.category))];
 
-  const handleDelete = async (deviceId) => {
-    try {
-      await deleteDeviceMutation.mutateAsync(deviceId);
-      setDeleteConfirmation(null);
-    } catch (err) {
-      console.error('Failed to delete device:', err);
-    }
-  };
+  const filtered = useMemo(
+      () =>
+          devices.filter((device) => {
+            const term = query.toLowerCase();
+            const matchesQuery = [
+              device.name,
+              device.manufacturer,
+              device.model,
+              device.serialNumber,
+            ].some((value) => value?.toLowerCase().includes(term));
+            return (
+                matchesQuery &&
+                (filter === 'all' || device.warrantyStatus === filter) &&
+                (category === 'all' || device.category === category)
+            );
+          }),
+      [devices, query, filter, category]
+  );
 
-  if (error) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="text-center"><h3 className="text-lg font-medium">Error loading devices</h3><p className="mt-1 text-sm text-gray-500">{error.userMessage || error.message}</p></div></div>;
-  }
+  const hasActiveFilters = query || filter !== 'all' || category !== 'all';
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          Your Devices
-          {isFetching && !isLoading && (
-            <RefreshCw className="w-4 h-4 text-gray-400 animate-spin" aria-label="Refreshing" />
-          )}
-        </h1>
-        <Button onClick={() => navigate('/devices/new')} size="lg">
-          <Plus className="w-5 h-5 mr-2" />
-          Add Device
-        </Button>
-      </div>
+      <div className="min-h-screen bg-slate-50 px-4 py-5 sm:px-8 sm:py-8 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-300">
+        <div className="mx-auto max-w-7xl space-y-6">
+          {/* Header */}
+          <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <div
+                  className="flex items-center gap-2 text-sm font-medium"
+                  style={{ color: accent }}
+              >
+                <Package className="h-4 w-4" />
+                Your inventory
+              </div>
+              {/*<h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">*/}
+              {/*  Devices*/}
+              {/*</h1>*/}
+              {/*<p className="mt-1 text-slate-500 dark:text-slate-400">*/}
+              {/*  One reliable record for every important purchase.*/}
+              {/*</p>*/}
+            </div>
+            <button
+                onClick={() => navigate('/devices/new')}
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:opacity-90"
+                style={{ backgroundColor: accent }}
+            >
+              <Plus className="h-4 w-4" />
+              Add device
+            </button>
+          </header>
 
-      <div className="flex flex-col sm:flex-row gap-4 mb-8">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <Input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, brand, model..."
-            className="pl-12 w-full h-12 text-base"
-          />
-        </div>
-        <Select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          options={DEVICE_STATUS_OPTIONS}
-          className="w-full sm:w-48 h-12 text-base"
-        />
-      </div>
+          {/* Search + Filters */}
+          <Card className="border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex flex-col gap-3 lg:flex-row">
+              {/* Search input */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+                <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search by name, brand, model, or serial number"
+                    className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = accent;
+                      e.currentTarget.style.boxShadow = `0 0 0 3px ${accent}20`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '';
+                      e.currentTarget.style.boxShadow = '';
+                    }}
+                />
+              </div>
 
-      {deleteConfirmation && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <Card className="w-full max-w-md mx-4">
-            <div className="p-6 text-center">
-              <h3 className="text-xl font-semibold mb-2">Confirm Deletion</h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Are you sure you want to delete "{deleteConfirmation.name}"? This is irreversible.
-              </p>
-              <div className="flex justify-center gap-4">
-                <Button variant="outline" onClick={() => setDeleteConfirmation(null)} className="flex-1" disabled={deleteDeviceMutation.isPending}>Cancel</Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => handleDelete(deleteConfirmation.id)}
-                  className="flex-1"
-                  isLoading={deleteDeviceMutation.isPending}
+              {/* Filter dropdowns */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                    className="flex items-center gap-2 text-sm font-medium"
+                    style={{ color: accent }}
                 >
-                  Delete
-                </Button>
+                  <SlidersHorizontal className="h-4 w-4" />
+                  <span className="hidden sm:inline">Filter</span>
+                </div>
+                <select
+                    value={filter}
+                    onChange={(event) => setFilter(event.target.value)}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                    onFocus={(e) => (e.currentTarget.style.borderColor = accent)}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = '')}
+                >
+                  <option value="all">All statuses</option>
+                  <option value="active">Protected</option>
+                  <option value="expiring-soon">Expiring soon</option>
+                  <option value="expired">Expired</option>
+                </select>
+                <select
+                    value={category}
+                    onChange={(event) => setCategory(event.target.value)}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                    onFocus={(e) => (e.currentTarget.style.borderColor = accent)}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = '')}
+                >
+                  <option value="all">All categories</option>
+                  {categories.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                  ))}
+                </select>
               </div>
             </div>
+            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              {hasActiveFilters && (
+                  <button
+                      onClick={() => {
+                        setQuery('');
+                        setFilter('all');
+                        setCategory('all');
+                      }}
+                      className="inline-flex items-center gap-1 font-medium transition-colors hover:underline"
+                      style={{ color: accent }}
+                  >
+                    <X className="h-3 w-3" />
+                    Clear filters
+                  </button>
+              )}
+            </div>
           </Card>
-        </div>
-      )}
 
-      {/* Skeleton grid: only for the very first load with an empty cache.
-          Point #5/#6 - if we already have cached devices (even stale), show
-          them immediately instead of a skeleton, and quietly refresh in the
-          background (see the small spinner next to the title above). */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <DeviceCardSkeleton key={i} />
-          ))}
+          {/* Content */}
+          {isLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {[1, 2, 3, 4, 5, 6].map((item) => (
+                    <div
+                        key={item}
+                        className="h-64 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700"
+                    />
+                ))}
+              </div>
+          ) : filtered.length ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filtered.map((device) => (
+                    <DeviceCard key={device.id} device={device} accent={accent} />
+                ))}
+              </div>
+          ) : (
+              <Card className="border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-600 dark:bg-slate-800">
+                <div
+                    className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl"
+                    style={{ backgroundColor: `${accent}15` }}
+                >
+                  <Filter className="h-6 w-6" style={{ color: accent }} />
+                </div>
+                <h2 className="mt-4 font-semibold text-slate-900 dark:text-slate-100">
+                  No devices match these filters
+                </h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Try a different search or add a new device.
+                </p>
+                <button
+                    onClick={() => navigate('/devices/new')}
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all duration-300 hover:opacity-90"
+                    style={{ backgroundColor: accent }}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add a device
+                </button>
+              </Card>
+          )}
         </div>
-      ) : filteredDevices.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredDevices.map(device => (
-            <DeviceCard
-              key={device.id}
-              device={device}
-              onDelete={() => setDeleteConfirmation(device)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-20 px-6 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">No Devices Found</h3>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">
-            {searchQuery || statusFilter !== 'all' ? "Try adjusting your search or filters." : "Click 'Add Device' to get started."}
-          </p>
-        </div>
-      )}
-    </div>
+      </div>
   );
 }

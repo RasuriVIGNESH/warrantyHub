@@ -2,22 +2,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import deviceService from '../services/deviceService';
 
-// ============================================================================
-// Single source of truth for all device/document/maintenance data-fetching.
-// Everything goes through React Query so that:
-//   - the same query key = one shared cache entry, read by every page that
-//     needs it (Dashboard + Devices both read ['devices'], nothing here ever
-//     fires two independent network calls for the same data)
-//   - staleTime/gcTime (configured in App.jsx: 60s / 5min) means revisiting
-//     a page you were just on serves cached data instantly, no refetch
-//   - past staleTime, React Query serves the cached (stale) data immediately
-//     AND refetches in the background, swapping in fresh data if it changed
-//     - this *is* the "show cached data now, update if backend has changed
-//       it" behavior, for free
-//   - mutations (create/update/delete) patch the cache directly instead of
-//     forcing a full list refetch, so the UI updates instantly
-// ============================================================================
 
+const STATUS_MAP = {
+  ACTIVE: 'active',
+  EXPIRED: 'expired',
+  EXPIRING_SOON: 'expiring-soon',
+  PENDING: 'pending',
+};
+
+function normalizeDevice(device) {
+  if (!device) return device;
+  return {
+    ...device,
+    warrantyStatus: STATUS_MAP[device.warrantyStatus] || device.warrantyStatus,
+    documents: device.documents || [],
+    maintenanceHistory: device.maintenanceHistory || [],
+  };
+}
 const deviceKeys = {
   all: ['devices'],
   detail: (id) => ['devices', id],
@@ -32,7 +33,8 @@ export function useDevicesQuery() {
     queryKey: deviceKeys.all,
     queryFn: async () => {
       const data = await deviceService.getAllDevices();
-      return Array.isArray(data) ? data : (Array.isArray(data?.devices) ? data.devices : []);
+      const list = Array.isArray(data) ? data : (Array.isArray(data?.devices) ? data.devices : []);
+      return list.map(normalizeDevice);
     },
     enabled: isAuthenticated,
   });
@@ -44,7 +46,7 @@ export function useDeviceQuery(deviceId) {
 
   return useQuery({
     queryKey: deviceKeys.detail(deviceId),
-    queryFn: () => deviceService.getDeviceById(deviceId),
+    queryFn: async () => normalizeDevice(await deviceService.getDeviceById(deviceId)),
     enabled: isAuthenticated && !!deviceId,
     // Paint instantly with whatever we already have for this device from the
     // devices-list cache (e.g. the user just came from /devices), while this
@@ -78,7 +80,7 @@ export function useCreateDevice() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ deviceData, file }) => {
-      const newDevice = await deviceService.createDevice(deviceData);
+      const newDevice = normalizeDevice(await deviceService.createDevice(deviceData));
       if (file && newDevice.id) {
         await deviceService.uploadDocument(newDevice.id, file);
       }
@@ -93,7 +95,7 @@ export function useCreateDevice() {
 export function useUpdateDevice(deviceId) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (deviceData) => deviceService.updateDevice(deviceId, deviceData),
+    mutationFn: async (deviceData) => normalizeDevice(await deviceService.updateDevice(deviceId, deviceData)),
     onSuccess: (updated) => {
       queryClient.setQueryData(deviceKeys.detail(deviceId), (old) => ({ ...old, ...updated }));
       queryClient.setQueryData(deviceKeys.all, (old = []) =>

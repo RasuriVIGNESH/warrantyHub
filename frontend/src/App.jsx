@@ -10,7 +10,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { ErrorFallback } from './components/ErrorFallback';
 
 // Lazy load pages
-const LandingPage = lazy(() => import('./pages/LandingPage'));
+const LandingPage = lazy(() => import('./pages/LandingPage.jsx'));
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const Devices = lazy(() => import('./pages/Devices').then(m => ({ default: m.Devices })));
 const AddDevice = lazy(() => import('./pages/AddDevice').then(m => ({ default: m.AddDevice })));
@@ -23,6 +23,9 @@ const OAuth2RedirectHandler = lazy(() => import('./pages/auth/OAuth2RedirectHand
 const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 const UpdateProfile = lazy(() => import('./pages/UpdateProfile').then(m => ({ default: m.UpdateProfile })));
+const Claims = lazy(() => import('./pages/Claims').then(m => ({ default: m.Claims })));
+const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
+const Household = lazy(() => import('./pages/Household').then(m => ({ default: m.Household })));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -152,6 +155,21 @@ function AppRoutes() {
           <Route path="/profile/edit" element={
             <Suspense fallback={<LoadingScreen />}>
               <UpdateProfile />
+            </Suspense>
+          } />
+          <Route path="/claims" element={
+            <Suspense fallback={<LoadingScreen />}>
+              <Claims />
+            </Suspense>
+          } />
+          <Route path="/reports" element={
+            <Suspense fallback={<LoadingScreen />}>
+              <Reports />
+            </Suspense>
+          } />
+          <Route path="/household" element={
+            <Suspense fallback={<LoadingScreen />}>
+              <Household />
             </Suspense>
           } />
         </Route>

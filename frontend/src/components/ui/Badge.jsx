@@ -19,6 +19,7 @@ const sizes = {
 export function Badge({
   children,
   variant = 'primary',
+  color,
   size = 'md',
   className,
   rounded = true,
@@ -30,7 +31,7 @@ export function Badge({
     <span
       className={clsx(
         'inline-flex items-center font-medium',
-        variants[variant],
+        variants[color || variant] || variants.primary,
         sizes[size],
         rounded ? 'rounded-full' : 'rounded',
         className
@@ -74,6 +75,7 @@ export function Badge({
 Badge.propTypes = {
   children: PropTypes.node.isRequired,
   variant: PropTypes.oneOf(Object.keys(variants)),
+  color: PropTypes.oneOf(Object.keys(variants)),
   size: PropTypes.oneOf(Object.keys(sizes)),
   className: PropTypes.string,
   rounded: PropTypes.bool,

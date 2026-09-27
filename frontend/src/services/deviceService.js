@@ -23,9 +23,7 @@ class DeviceService {
 
   // POST /api/devices/new
   async createDevice(deviceData) {
-    // deviceData: { name*, manufacturer, model, serialNumber, purchaseDate,
-    //               warrantyEndDate, warrantyProvider, purchasePrice, notes }
-    const response = await api.post(`${DEVICE_ENDPOINTS.BASE}/new`, deviceData);
+    const response = await api.post(DEVICE_ENDPOINTS.BASE, deviceData);
     return response.data; // DeviceDTO
   }
 

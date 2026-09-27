@@ -180,10 +180,10 @@ export const UI_CONFIG = {
   TOAST: {
     DURATION: 4000, // 4 seconds
     POSITION: 'top-right',
-    SUCCESS_ICON: '✅',
-    ERROR_ICON: '❌',
-    WARNING_ICON: '⚠️',
-    INFO_ICON: 'ℹ️',
+    SUCCESS_ICON: '',
+    ERROR_ICON: '',
+    WARNING_ICON: '',
+    INFO_ICON: '',
   },
 
   // Modal settings

@@ -1,233 +1,127 @@
 package com.warrantyhub.service;
 
 import com.warrantyhub.dto.request.DeviceRequest;
-import com.warrantyhub.dto.response.ApiResponse;
-import com.warrantyhub.dto.response.DeviceDTO;
-import com.warrantyhub.dto.response.DeviceListResponse;
-import com.warrantyhub.dto.response.DocumentDTO;
-import com.warrantyhub.dto.response.MaintenanceRecordDTO;
-import com.warrantyhub.model.*;
+import com.warrantyhub.dto.response.*;
 import com.warrantyhub.exception.ResourceNotFoundException;
 import com.warrantyhub.exception.UnauthorizedException;
+import com.warrantyhub.model.*;
 import com.warrantyhub.model.enums.Status;
 import com.warrantyhub.repository.DeviceRepository;
 import com.warrantyhub.repository.UserRepository;
-import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.stream.Collectors;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 
 @Service
-public class DeviceService{
+public class DeviceService {
+    private final DeviceRepository devices;
+    private final UserRepository users;
 
-    private final DeviceRepository deviceRepository;
-    private final UserRepository userRepository;
-    private final ModelMapper modelMapper;
-
-    @Autowired
-    public DeviceService(
-            DeviceRepository deviceRepository,
-            UserRepository userRepository,
-            ModelMapper modelMapper) {
-        this.deviceRepository = deviceRepository;
-        this.userRepository = userRepository;
-        this.modelMapper = modelMapper;
+    public DeviceService(DeviceRepository devices, UserRepository users) {
+        this.devices = devices;
+        this.users = users;
     }
 
-
-    public DeviceListResponse getAllDevicesByUser(Authentication authentication) {
-        User user = getUserFromAuthentication(authentication);
-        List<Device> devices = deviceRepository.findByUser(user);
-
-        List<DeviceDTO> deviceDTOs = devices.stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-
-        DeviceListResponse response = new DeviceListResponse();
-        response.setDevices(deviceDTOs);
-        return response;
+    @Transactional(readOnly = true)
+    public DeviceListResponse getAllDevicesByUser(Authentication auth, String query, Status status, String category) {
+        User user = currentUser(auth);
+        var result = devices.findByUserWithDetails(user).stream()
+                .filter(d -> status == null || d.getWarrantyStatus() == status)
+                .filter(d -> category == null || category.isBlank() || category.equalsIgnoreCase(d.getCategory()))
+                .filter(d -> query == null || query.isBlank() || searchable(d).contains(query.toLowerCase()))
+                .sorted(Comparator.comparing(Device::getWarrantyEndDate, Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(this::toDto).toList();
+        return new DeviceListResponse(result);
     }
 
-
-    public DeviceDTO getDeviceById(Long id, Authentication authentication) {
-        User user = getUserFromAuthentication(authentication);
-        Device device = deviceRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Device not found with id: " + id));
-        if (!device.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedException("You don't have permission to access this device");
-        }
-
-        return convertToDTO(device);
+    @Transactional(readOnly = true)
+    public DeviceDTO getDeviceById(Long id, Authentication auth) {
+        Device device = devices.findByIdWithDetails(id).orElseThrow(() -> new ResourceNotFoundException("Device not found"));
+        requireOwner(device, currentUser(auth));
+        return toDto(device);
     }
-
 
     @Transactional
-    public DeviceDTO createDevice(DeviceRequest deviceRequest, Authentication authentication) {
-        User user = getUserFromAuthentication(authentication);
-
+    public DeviceDTO createDevice(DeviceRequest request, Authentication auth) {
         Device device = new Device();
-        device.setName(deviceRequest.getName());
-        device.setManufacturer(deviceRequest.getManufacturer());
-        device.setModel(deviceRequest.getModel());
-        device.setSerialNumber(deviceRequest.getSerialNumber());
-        device.setPurchaseDate(deviceRequest.getPurchaseDate());
-        device.setWarrantyEndDate(deviceRequest.getWarrantyEndDate());
-        device.setWarrantyProvider(deviceRequest.getWarrantyProvider());
-        device.setPurchasePrice(deviceRequest.getPurchasePrice());
-        device.setNotes(deviceRequest.getNotes());
-        device.setUser(user);
-
-        // Set warranty status based on end date and purchase date
-        if (device.getWarrantyEndDate() != null && device.getPurchaseDate() != null) {
-            LocalDate today = LocalDate.now();
-            LocalDate warrantyEnd = device.getWarrantyEndDate();
-            LocalDate purchaseDate = device.getPurchaseDate();
-            if (warrantyEnd.isAfter(purchaseDate)) {
-                if (warrantyEnd.isAfter(today)) {
-                    if (warrantyEnd.isBefore(today.plusWeeks(1))) {
-                        device.setWarrantyStatus(Status.EXPIRING_SOON);
-                    } else {
-                        device.setWarrantyStatus(Status.ACTIVE);
-                    }
-                } else {
-                    device.setWarrantyStatus(Status.EXPIRED);
-                }
-            } else {
-                device.setWarrantyStatus(null);
-            }
-        } else {
-            device.setWarrantyStatus(null);
-        }
-
-        Device savedDevice = deviceRepository.save(device);
-        return convertToDTO(savedDevice);
+        device.setUser(currentUser(auth));
+        apply(device, request);
+        return toDto(devices.save(device));
     }
 
     @Transactional
-    public DeviceDTO updateDevice(Long id, DeviceRequest deviceRequest, Authentication authentication) {
-        User user = getUserFromAuthentication(authentication);
-
-        Device device = deviceRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Device not found with id: " + id));
-
-        // Check if device belongs to user
-        if (!device.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedException("You don't have permission to update this device");
-        }
-
-        // Update device fields
-        device.setName(deviceRequest.getName());
-        device.setManufacturer(deviceRequest.getManufacturer());
-        device.setModel(deviceRequest.getModel());
-        device.setSerialNumber(deviceRequest.getSerialNumber());
-        device.setPurchaseDate(deviceRequest.getPurchaseDate());
-        device.setWarrantyEndDate(deviceRequest.getWarrantyEndDate());
-        device.setWarrantyProvider(deviceRequest.getWarrantyProvider());
-        device.setPurchasePrice(deviceRequest.getPurchasePrice());
-        device.setNotes(deviceRequest.getNotes());
-
-        // Update warranty status based on end date and purchase date
-        if (device.getWarrantyEndDate() != null && device.getPurchaseDate() != null) {
-            LocalDate today = LocalDate.now();
-            LocalDate warrantyEnd = device.getWarrantyEndDate();
-            LocalDate purchaseDate = device.getPurchaseDate();
-            if (warrantyEnd.isAfter(purchaseDate)) {
-                if (warrantyEnd.isAfter(today)) {
-                    if (warrantyEnd.isBefore(today.plusWeeks(1))) {
-                        device.setWarrantyStatus(Status.EXPIRING_SOON);
-                    } else {
-                        device.setWarrantyStatus(Status.ACTIVE);
-                    }
-                } else {
-                    device.setWarrantyStatus(Status.EXPIRED);
-                }
-            } else {
-                device.setWarrantyStatus(null);
-            }
-        } else {
-            device.setWarrantyStatus(null);
-        }
-
-        Device updatedDevice = deviceRepository.save(device);
-        return convertToDTO(updatedDevice);
+    public DeviceDTO updateDevice(Long id, DeviceRequest request, Authentication auth) {
+        Device device = ownedDevice(id, auth);
+        apply(device, request);
+        return toDto(devices.save(device));
     }
-
 
     @Transactional
-    public ApiResponse deleteDevice(Long id, Authentication authentication) {
-        User user = getUserFromAuthentication(authentication);
+    public void deleteDevice(Long id, Authentication auth) {
+        devices.delete(ownedDevice(id, auth));
+    }
 
-        Device device = deviceRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Device not found with id: " + id));
-
-        // Check if device belongs to user
-        if (!device.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedException("You don't have permission to delete this device");
+    private void apply(Device d, DeviceRequest r) {
+        if (r.getPurchaseDate() != null && r.getWarrantyEndDate() != null && r.getWarrantyEndDate().isBefore(r.getPurchaseDate())) {
+            throw new IllegalArgumentException("Warranty end date cannot be before purchase date");
         }
-
-        deviceRepository.delete(device);
-        return new ApiResponse(true, "Device deleted successfully");
+        d.setName(r.getName().trim()); d.setType(r.getType()); d.setCategory(r.getCategory()); d.setManufacturer(r.getManufacturer());
+        d.setModel(r.getModel()); d.setSerialNumber(r.getSerialNumber()); d.setPurchaseDate(r.getPurchaseDate());
+        d.setWarrantyEndDate(r.getWarrantyEndDate()); d.setWarrantyDuration(r.getWarrantyDuration()); d.setWarrantyUnit(r.getWarrantyUnit());
+        d.setWarrantyProvider(r.getWarrantyProvider()); d.setPurchasePrice(r.getPurchasePrice()); d.setNotes(r.getNotes());
+        d.updateWarrantyStatus();
     }
 
-    private User getUserFromAuthentication(Authentication authentication) {
-        return userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    private Device ownedDevice(Long id, Authentication auth) {
+        Device device = devices.findByIdWithDetails(id).orElseThrow(() -> new ResourceNotFoundException("Device not found"));
+        requireOwner(device, currentUser(auth));
+        return device;
     }
 
-    private DeviceDTO convertToDTO(Device device) {
-        DeviceDTO deviceDTO = new DeviceDTO();
-        deviceDTO.setId(device.getId().toString());
-        deviceDTO.setName(device.getName());
-        deviceDTO.setManufacturer(device.getManufacturer());
-        deviceDTO.setModel(device.getModel());
-        deviceDTO.setSerialNumber(device.getSerialNumber());
-        deviceDTO.setPurchaseDate(device.getPurchaseDate());
-        deviceDTO.setWarrantyEndDate(device.getWarrantyEndDate());
-        deviceDTO.setWarrantyStatus(device.getWarrantyStatus());
-        deviceDTO.setWarrantyProvider(device.getWarrantyProvider());
-        deviceDTO.setPurchasePrice(device.getPurchasePrice());
-        deviceDTO.setNotes(device.getNotes());
-
-        // Convert maintenance records
-        List<MaintenanceRecordDTO> maintenanceRecordDTOs = device.getMaintenanceHistory().stream()
-                .map(this::convertToMaintenanceDTO)
-                .collect(Collectors.toList());
-        deviceDTO.setMaintenanceHistory(maintenanceRecordDTOs);
-
-        // Convert documents
-        List<DocumentDTO> documentDTOs = device.getDocuments().stream()
-                .map(this::convertToDocumentDTO)
-                .collect(Collectors.toList());
-        deviceDTO.setDocuments(documentDTOs);
-
-        return deviceDTO;
+    private void requireOwner(Device device, User user) {
+        if (!device.getUser().getId().equals(user.getId())) throw new UnauthorizedException("Access denied");
     }
 
-    private MaintenanceRecordDTO convertToMaintenanceDTO(MaintenanceRecord record) {
-        MaintenanceRecordDTO dto = new MaintenanceRecordDTO();
-        dto.setId(record.getId().toString());
-        dto.setDate(record.getDate());
-        dto.setType(record.getType());
-        dto.setDescription(record.getDescription());
-        dto.setCost(record.getCost());
-        dto.setServiceProvider(record.getServiceProvider());
-        dto.setPartsReplaced(record.getPartsReplaced());
-        dto.setNextScheduledDate(record.getNextScheduledDate());
+    private User currentUser(Authentication auth) {
+        if (auth == null || auth.getName() == null) throw new UnauthorizedException("Authentication required");
+        return users.findByEmail(auth.getName().trim().toLowerCase()).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+
+    private String searchable(Device d) {
+        return String.join(" ", String.valueOf(d.getName()), String.valueOf(d.getManufacturer()), String.valueOf(d.getModel()), String.valueOf(d.getSerialNumber())).toLowerCase();
+    }
+
+    private DeviceDTO toDto(Device d) {
+        long days = d.getWarrantyEndDate() == null ? 0 : ChronoUnit.DAYS.between(LocalDate.now(), d.getWarrantyEndDate());
+        int completeness = 0;
+        if (d.getName() != null && !d.getName().isBlank()) completeness += 20;
+        if (d.getSerialNumber() != null && !d.getSerialNumber().isBlank()) completeness += 20;
+        if (d.getPurchaseDate() != null) completeness += 20;
+        if (d.getWarrantyEndDate() != null) completeness += 20;
+        if (d.getDocuments() != null && !d.getDocuments().isEmpty()) completeness += 20;
+        int health = Math.max(0, completeness - (d.getWarrantyStatus() == Status.EXPIRED ? 30 : 0));
+        DeviceDTO dto = new DeviceDTO();
+        dto.setId(String.valueOf(d.getId())); dto.setName(d.getName()); dto.setType(d.getType()); dto.setCategory(d.getCategory());
+        dto.setManufacturer(d.getManufacturer()); dto.setModel(d.getModel()); dto.setSerialNumber(d.getSerialNumber()); dto.setPurchaseDate(d.getPurchaseDate());
+        dto.setWarrantyEndDate(d.getWarrantyEndDate()); dto.setWarrantyDuration(d.getWarrantyDuration()); dto.setWarrantyUnit(d.getWarrantyUnit());
+        dto.setWarrantyStatus(d.getWarrantyStatus()); dto.setDaysRemaining(days); dto.setHealthScore(health); dto.setRecordCompleteness(completeness);
+        dto.setWarrantyProvider(d.getWarrantyProvider()); dto.setPurchasePrice(d.getPurchasePrice()); dto.setNotes(d.getNotes());
+        dto.setMaintenanceHistory(d.getMaintenanceHistory().stream().map(this::toMaintenance).toList());
+        dto.setDocuments(d.getDocuments().stream().map(this::toDocument).toList());
         return dto;
     }
 
-    private DocumentDTO convertToDocumentDTO(Document document) {
-        DocumentDTO dto = new DocumentDTO();
-        dto.setId(document.getId().toString());
-        dto.setName(document.getName());
-        
-        dto.setFileType(document.getFileType());
-        dto.setUploadDate(document.getUploadDate());
-        return dto;
+    private MaintenanceRecordDTO toMaintenance(MaintenanceRecord r) {
+        MaintenanceRecordDTO dto = new MaintenanceRecordDTO(); dto.setId(String.valueOf(r.getId())); dto.setDate(r.getDate()); dto.setType(r.getType());
+        dto.setDescription(r.getDescription()); dto.setCost(r.getCost()); dto.setServiceProvider(r.getServiceProvider()); dto.setPartsReplaced(r.getPartsReplaced());
+        dto.setNextScheduledDate(r.getNextScheduledDate()); return dto;
+    }
+
+    private DocumentDTO toDocument(Document d) {
+        return new DocumentDTO(String.valueOf(d.getId()), d.getName(), d.getFileType(), d.getFileUrl(), d.getFileSize(), d.getUploadDate());
     }
 }

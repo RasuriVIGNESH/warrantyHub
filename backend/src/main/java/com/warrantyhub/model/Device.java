@@ -2,52 +2,50 @@ package com.warrantyhub.model;
 
 import com.warrantyhub.model.enums.Status;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
+import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @NoArgsConstructor
 @AllArgsConstructor
-@Getter @Setter
+@Getter
+@Setter
 @Entity
-@Table(name = "devices",indexes = {
-		@Index(name = "idx_device_user_id", columnList = "user_id"),
-		@Index(name = "idx_device_warranty_end_date", columnList = "warrantyEndDate"),
-		@Index(name = "idx_device_warranty", columnList = "warrantyEndDate"),
-		@Index(name = "idx_device_user_status", columnList = "user_id, warrantyStatus")
-				})
+@Table(name = "devices", indexes = {
+        @Index(name = "idx_device_user_id", columnList = "user_id"),
+        @Index(name = "idx_device_warranty_end_date", columnList = "warranty_end_date"),
+        @Index(name = "idx_device_user_status", columnList = "user_id,warranty_status")
+})
 public class Device {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false)
     private String name;
-
+    private String type;
+    private String category;
     private String manufacturer;
     private String model;
     private String serialNumber;
     private LocalDate purchaseDate;
     private LocalDate warrantyEndDate;
+    private Integer warrantyDuration;
+    private String warrantyUnit;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-	@Enumerated
-    private Status warrantyStatus;
+    private Status warrantyStatus = Status.PENDING;
 
     private String warrantyProvider;
     private BigDecimal purchasePrice;
     private String notes;
+    private Instant createdAt;
+    private Instant updatedAt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -57,26 +55,25 @@ public class Device {
     @OneToMany(mappedBy = "device", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Document> documents = new ArrayList<>();
 
-
-	public void updateWarrantyStatus() {
-        if (warrantyEndDate == null) {
-            this.warrantyStatus = Status.PENDING;
-            return;
-        }
-
-        LocalDate now = LocalDate.now();
-        if (now.isAfter(warrantyEndDate)) {
-            this.warrantyStatus = Status.EXPIRED;
-        } else if (now.plusDays(7).isAfter(warrantyEndDate)) {
-            this.warrantyStatus = Status.EXPIRING_SOON;
-        } else {
-            this.warrantyStatus = Status.ACTIVE;
-        }
+    @PrePersist
+    void onCreate() {
+        createdAt = Instant.now();
+        updatedAt = createdAt;
     }
 
-    public boolean isWarrantyExpiringSoon() {
-        if (warrantyEndDate == null) return false;
-        LocalDate now = LocalDate.now();
-        return !now.isAfter(warrantyEndDate) && now.plusDays(7).isAfter(warrantyEndDate);
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = Instant.now();
+    }
+
+    public void updateWarrantyStatus() {
+        if (warrantyEndDate == null) {
+            warrantyStatus = Status.PENDING;
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        if (warrantyEndDate.isBefore(today)) warrantyStatus = Status.EXPIRED;
+        else if (!warrantyEndDate.isAfter(today.plusDays(30))) warrantyStatus = Status.EXPIRING_SOON;
+        else warrantyStatus = Status.ACTIVE;
     }
 }

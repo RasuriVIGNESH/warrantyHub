@@ -1,376 +1,47 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  X,
-  Tv, Smartphone, Laptop, Package, Refrigerator, WashingMachine, AirVent, Droplet,
-  Speaker, Printer, Monitor, Gamepad, Coffee, Utensils, Fan, Lamp, Radio, Camera,
-  Watch, Tablet, Wifi, Plug, Microwave, Lock, Thermometer, HardDrive, Headphones,
-  ScanLine, Video, DoorClosed, PlaySquare, Projector, Disc
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2, FileText, Plus, ScanLine, ShieldCheck, Upload } from 'lucide-react';
 import { useCreateDevice } from '../hooks/useDevices';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
 
-// Utility to format date as YYYY-MM-DD
-function formatDateForBackend(date) {
-  if (!date) return '';
-  const d = new Date(date);
-  return d.toISOString().split('T')[0];
-}
-
-// 🔽 Local sub-component: only used on this page, so it lives here instead of its own file.
-const DEVICE_TYPES = [
-  // Mobile & Audio
-  { id: 'smartphone', name: 'SMARTPHONE', icon: Smartphone, category: 'Mobile' },
-  { id: 'tablet', name: 'TABLET', icon: Tablet, category: 'Mobile' },
-  { id: 'smartwatch', name: 'SMARTWATCH', icon: Watch, category: 'Mobile' },
-  { id: 'headphones', name: 'HEADPHONES', icon: Headphones, category: 'Mobile' },
-  { id: 'power-bank', name: 'POWER BANK', icon: Package, category: 'Mobile' },
-
-  // Computing & Work
-  { id: 'laptop', name: 'LAPTOP', icon: Laptop, category: 'Computing' },
-  { id: 'desktop', name: 'DESKTOP PC', icon: Monitor, category: 'Computing' },
-  { id: 'printer', name: 'PRINTER', icon: Printer, category: 'Computing' },
-  { id: 'monitor', name: 'MONITOR', icon: Monitor, category: 'Computing' },
-  { id: 'scanner', name: 'SCANNER', icon: ScanLine, category: 'Computing' },
-  { id: 'external-drive', name: 'EXTERNAL DRIVE', icon: HardDrive, category: 'Computing' },
-  { id: 'webcam', name: 'WEBCAM', icon: Video, category: 'Computing' },
-
-  // Entertainment & Media
-  { id: 'smart-tv', name: 'SMART TV', icon: Tv, category: 'Entertainment' },
-  { id: 'streaming-device', name: 'STREAMING DEVICE', icon: PlaySquare, category: 'Entertainment' },
-  { id: 'soundbar', name: 'SOUNDBAR', icon: Speaker, category: 'Entertainment' },
-  { id: 'home-theater', name: 'HOME THEATER', icon: Speaker, category: 'Entertainment' },
-  { id: 'projector', name: 'PROJECTOR', icon: Projector, category: 'Entertainment' },
-  { id: 'dvd-player', name: 'DVD PLAYER', icon: Disc, category: 'Entertainment' },
-  { id: 'gaming-console', name: 'GAMING CONSOLE', icon: Gamepad, category: 'Entertainment' },
-  { id: 'portable-speaker', name: 'PORTABLE SPEAKER', icon: Radio, category: 'Entertainment' },
-
-  // Kitchen Appliances
-  { id: 'smart-refrigerator', name: 'SMART REFRIGERATOR', icon: Refrigerator, category: 'Kitchen' },
-  { id: 'refrigerator', name: 'REFRIGERATOR', icon: Refrigerator, category: 'Kitchen' },
-  { id: 'microwave', name: 'MICROWAVE', icon: Microwave, category: 'Kitchen' },
-  { id: 'dishwasher', name: 'DISHWASHER', icon: Utensils, category: 'Kitchen' },
-  { id: 'coffee-maker', name: 'COFFEE MAKER', icon: Coffee, category: 'Kitchen' },
-  { id: 'smart-display', name: 'SMART DISPLAY', icon: Monitor, category: 'Kitchen' },
-
-  // Water & Sensors
-  { id: 'water-purifier', name: 'WATER PURIFIER', icon: Droplet, category: 'Water & Sensors' },
-  { id: 'water-heater', name: 'WATER HEATER', icon: Droplet, category: 'Water & Sensors' },
-  { id: 'water-sensor', name: 'WATER SENSOR', icon: Droplet, category: 'Water & Sensors' },
-
-  // Climate Control
-  { id: 'air-conditioner', name: 'AIR CONDITIONER', icon: AirVent, category: 'Climate' },
-  { id: 'air-purifier', name: 'AIR PURIFIER', icon: AirVent, category: 'Climate' },
-  { id: 'fan', name: 'FAN', icon: Fan, category: 'Climate' },
-  { id: 'dehumidifier', name: 'DEHUMIDIFIER', icon: Droplet, category: 'Climate' },
-  { id: 'thermostat', name: 'THERMOSTAT', icon: Thermometer, category: 'Climate' },
-
-  // Laundry & Cleaning
-  { id: 'washing-machine', name: 'WASHING MACHINE', icon: WashingMachine, category: 'Laundry' },
-  { id: 'dryer', name: 'DRYER', icon: Fan, category: 'Laundry' },
-  { id: 'vacuum-cleaner', name: 'VACUUM CLEANER', icon: Package, category: 'Laundry' },
-  { id: 'steam-cleaner', name: 'STEAM CLEANER', icon: Package, category: 'Laundry' },
-
-  // Smart Home Security
-  { id: 'smart-lighting', name: 'SMART LIGHTING', icon: Lamp, category: 'Smart Security' },
-  { id: 'security-camera', name: 'SECURITY CAMERA', icon: Camera, category: 'Smart Security' },
-  { id: 'video-doorbell', name: 'VIDEO DOORBELL', icon: DoorClosed, category: 'Smart Security' },
-  { id: 'smart-lock', name: 'SMART LOCK', icon: Lock, category: 'Smart Security' },
-  { id: 'router', name: 'ROUTER', icon: Wifi, category: 'Smart Security' },
-  { id: 'smart-plug', name: 'SMART PLUG', icon: Plug, category: 'Smart Security' },
-];
-
-function DeviceTypeSelector({ onSelect }) {
-  const devicesByCategory = DEVICE_TYPES.reduce((acc, device) => {
-    if (!acc[device.category]) acc[device.category] = [];
-    acc[device.category].push(device);
-    return acc;
-  }, {});
-
-  return (
-    <div className="p-6">
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-        Select device type
-      </h2>
-      <div className="space-y-6">
-        {Object.entries(devicesByCategory).map(([category, devices]) => (
-          <div key={category}>
-            <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">
-              {category}
-            </h3>
-            <div className="overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-              <div className="inline-flex gap-4 min-w-full md:grid md:grid-cols-4">
-                {devices.map((type) => {
-                  const Icon = type.icon;
-                  return (
-                    <button
-                      key={type.id}
-                      onClick={() => onSelect(type)}
-                      className="flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-700 rounded-lg border-2 border-transparent hover:border-primary hover:bg-gray-50 dark:hover:bg-gray-600 transition-all group min-w-[150px] md:min-w-0"
-                    >
-                      <Icon className="w-12 h-12 mb-3 text-gray-600 dark:text-gray-300 group-hover:text-primary dark:group-hover:text-primary transition-colors" />
-                      <span className="text-sm font-medium text-gray-900 dark:text-white text-center">
-                        {type.name}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+const types = ['Laptop', 'Smartphone', 'Television', 'Refrigerator', 'Washing machine', 'Air conditioner', 'Other'];
+const today = new Date().toISOString().slice(0, 10);
 
 export function AddDevice() {
   const navigate = useNavigate();
-  const createDeviceMutation = useCreateDevice();
-  const [loading, setLoading] = useState(false);
-  const [selectedDeviceType, setSelectedDeviceType] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    manufacturer: '', // ✨ FIX: Changed 'brand' to 'manufacturer'
-    model: '',
-    serialNumber: '',
-    purchaseDate: '',
-    warrantyDuration: '',
-    purchasePrice: '',
-    warrantyDocument: null,
-    notes: '',
-  });
-
-  const handleDeviceTypeSelect = (deviceType) => {
-    setSelectedDeviceType(deviceType);
+  const createDevice = useCreateDevice();
+  const [mode, setMode] = useState(null);
+  const [step, setStep] = useState(1);
+  const [file, setFile] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [form, setForm] = useState({ name: '', type: '', manufacturer: '', model: '', serialNumber: '', purchaseDate: '', warrantyDuration: '12', purchasePrice: '', notes: '' });
+  const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  const validate = () => { const next = {}; if (!form.name.trim()) next.name = 'Enter a name for this device'; if (!form.type) next.type = 'Choose a device type'; if (!form.manufacturer.trim()) next.manufacturer = 'Enter the manufacturer'; if (!form.purchaseDate) next.purchaseDate = 'Choose the purchase date'; if (!form.warrantyDuration || Number(form.warrantyDuration) < 1) next.warrantyDuration = 'Enter a valid warranty length'; setErrors(next); return !Object.keys(next).length; };
+  const submit = async event => {
+    event.preventDefault();
+    if (!validate()) return;
+    const end = new Date(form.purchaseDate);
+    end.setMonth(end.getMonth() + Number(form.warrantyDuration));
+    const deviceData = {
+      name: form.name,
+      type: form.type,
+      category: form.type === 'Other' ? 'Other' : 'Home and personal',
+      manufacturer: form.manufacturer,
+      model: form.model,
+      serialNumber: form.serialNumber,
+      purchaseDate: form.purchaseDate,
+      warrantyEndDate: end.toISOString().slice(0, 10),
+      warrantyDuration: Number(form.warrantyDuration),
+      warrantyUnit: 'MONTHS',
+      purchasePrice: Number(form.purchasePrice || 0),
+      notes: form.notes,
+    };
+    await createDevice.mutateAsync({ deviceData, file });
+    navigate('/devices');
   };
-
-  const handleChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      handleChange('warrantyDocument', file);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      // Calculate warranty end date
-      const purchaseDate = new Date(formData.purchaseDate);
-      const warrantyEndDate = new Date(purchaseDate);
-      warrantyEndDate.setMonth(purchaseDate.getMonth() + parseInt(formData.warrantyDuration));
-
-      // ✨ FIX: Correctly separate the file from the rest of the data
-      const { warrantyDocument, ...deviceDetails } = formData;
-
-      const deviceData = {
-        ...deviceDetails,
-        type: selectedDeviceType.id,
-        purchaseDate: formatDateForBackend(formData.purchaseDate),
-        warrantyDuration: parseInt(formData.warrantyDuration),
-        warrantyUnit: 'MONTHS',
-        warrantyEndDate: formatDateForBackend(warrantyEndDate),
-        warrantyStatus: 'active',
-        description: '',
-      };
-
-      // Pass both the device data and the file object to the mutation
-      await createDeviceMutation.mutateAsync({ deviceData, file: warrantyDocument });
-      
-      navigate('/devices');
-    } catch (error) {
-      console.error('Failed to create device:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-4xl max-h-[90vh] relative bg-white dark:bg-gray-800 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:none] overflow-y-auto">
-        <button
-          onClick={() => navigate('/devices')}
-          className="absolute top-4 right-4 p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        <div className="p-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-            Add New Device
-          </h1>
-
-          {!selectedDeviceType ? (
-            <div className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:none]">
-              <DeviceTypeSelector onSelect={handleDeviceTypeSelect} />
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Device Name*
-                  </label>
-                  <Input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => handleChange('name', e.target.value)}
-                    placeholder={`e.g., My ${selectedDeviceType.name}`}
-                    required
-                    className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white py-2.5 px-4 border-2"
-                  />
-                </div>
-
-                {/* ✨ FIX: Changed label and field to 'manufacturer' */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Manufacturer/Brand*
-                  </label>
-                  <Input
-                    type="text"
-                    value={formData.manufacturer}
-                    onChange={(e) => handleChange('manufacturer', e.target.value)}
-                    placeholder="e.g., Samsung"
-                    required
-                    className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white py-2.5 px-4 border-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Model
-                  </label>
-                  <Input
-                    type="text"
-                    value={formData.model}
-                    onChange={(e) => handleChange('model', e.target.value)}
-                    placeholder="e.g., Galaxy Tab S8"
-                    className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white py-2.5 px-4 border-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Serial Number
-                  </label>
-                  <Input
-                    type="text"
-                    value={formData.serialNumber}
-                    onChange={(e) => handleChange('serialNumber', e.target.value)}
-                    placeholder="Device serial number"
-                    className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white py-2.5 px-4 border-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Purchase Date*
-                  </label>
-                  <Input
-                    type="date"
-                    value={formData.purchaseDate}
-                    onChange={(e) => handleChange('purchaseDate', e.target.value)}
-                    required
-                    className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white py-2.5 px-4 border-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Warranty Duration (months)*
-                  </label>
-                  <Input
-                    type="number"
-                    value={formData.warrantyDuration}
-                    onChange={(e) => handleChange('warrantyDuration', e.target.value)}
-                    placeholder="e.g., 12"
-                    required
-                    min="1"
-                    className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white py-2.5 px-4 border-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Purchase Price
-                  </label>
-                  <Input
-                    type="number"
-                    value={formData.purchasePrice}
-                    onChange={(e) => handleChange('purchasePrice', e.target.value)}
-                    placeholder="e.g., 499.99"
-                    step="0.01"
-                    min="0"
-                    className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white py-2.5 px-4 border-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Warranty Document
-                  </label>
-                  <input
-                    type="file"
-                    onChange={handleFileChange}
-                    accept="image/*,.pdf"
-                    className="block w-full text-sm text-gray-500 dark:text-gray-400
-                      file:mr-4 file:py-2.5 file:px-4
-                      file:rounded-md file:border-0
-                      file:text-sm file:font-medium
-                      file:bg-primary file:text-white
-                      hover:file:cursor-pointer hover:file:bg-primary/90
-                      dark:file:bg-primary dark:file:text-white
-                      dark:hover:file:bg-primary/90
-                      py-2 border-2 border-gray-300 dark:border-gray-600 rounded-md"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => handleChange('notes', e.target.value)}
-                  placeholder="Any additional notes about the device..."
-                  className="block w-full rounded-md border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm focus:border-primary focus:ring-primary sm:text-sm text-gray-900 dark:text-white py-2.5 px-4"
-                  rows={4}
-                />
-              </div>
-
-              <div className="flex justify-end space-x-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSelectedDeviceType(null)}
-                  className="dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  Back
-                </Button>
-                <Button
-                  type="submit"
-                  isLoading={loading}
-                  disabled={loading}
-                >
-                  Add Device
-                </Button>
-              </div>
-            </form>
-          )}
-        </div>
-      </Card>
-    </div>
-  );
+  if (!mode) return <div className="min-h-screen bg-slate-50 px-4 py-8 sm:px-8"><div className="mx-auto max-w-4xl"><button onClick={() => navigate('/devices')} className="mb-6 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-blue-700"><ArrowLeft className="h-4 w-4" />Back to devices</button><Card className="border-slate-200 bg-white p-6 shadow-sm sm:p-10"><div className="mx-auto max-w-2xl text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700"><ShieldCheck className="h-7 w-7" /></div><h1 className="mt-5 text-3xl font-semibold tracking-tight text-slate-950">Add something worth protecting</h1><p className="mt-2 text-slate-500">Start with a receipt or enter the details yourself. You can complete the record later.</p><div className="mt-8 grid gap-4 sm:grid-cols-2"><button onClick={() => setMode('scan')} className="rounded-2xl border border-blue-200 bg-blue-50 p-6 text-left transition hover:border-blue-400"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-700"><ScanLine className="h-5 w-5" /></div><h2 className="mt-4 font-semibold text-slate-950">Scan a receipt</h2><p className="mt-1 text-sm text-slate-500">Upload a receipt and review the fields it contains. OCR can be connected later.</p><span className="mt-4 inline-flex items-center text-sm font-medium text-blue-700">Recommended <ArrowLeft className="ml-2 h-4 w-4 rotate-180" /></span></button><button onClick={() => setMode('manual')} className="rounded-2xl border border-slate-200 p-6 text-left transition hover:border-blue-300 hover:bg-slate-50"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><Plus className="h-5 w-5" /></div><h2 className="mt-4 font-semibold text-slate-950">Enter manually</h2><p className="mt-1 text-sm text-slate-500">Add the important details now and attach documents whenever you are ready.</p><span className="mt-4 inline-flex items-center text-sm font-medium text-slate-700">Start entry <ArrowLeft className="ml-2 h-4 w-4 rotate-180" /></span></button></div></div></Card></div></div>;
+  return <div className="min-h-screen bg-slate-50 px-4 py-5 sm:px-8 sm:py-8"><div className="mx-auto max-w-4xl"><button onClick={() => mode === 'scan' && !file ? setMode(null) : navigate('/devices')} className="mb-6 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-blue-700"><ArrowLeft className="h-4 w-4" />{mode === 'scan' && !file ? 'Choose another option' : 'Cancel'}</button><Card className="border-slate-200 bg-white p-6 shadow-sm sm:p-8"><div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-start"><div><p className="text-sm font-medium text-blue-700">Step {step} of 2</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{mode === 'scan' && !file ? 'Upload your receipt' : 'Confirm device details'}</h1><p className="mt-1 text-sm text-slate-500">{mode === 'scan' && !file ? 'We will show a review screen before anything is saved.' : 'Only the marked fields are needed to start tracking.'}</p></div><div className="flex items-center gap-2">{[1, 2].map(item => <span key={item} className={`h-2 w-12 rounded-full ${item <= step ? 'bg-blue-700' : 'bg-slate-200'}`} />)}</div></div>{mode === 'scan' && !file ? <div className="py-12 text-center"><label className="mx-auto flex max-w-md cursor-pointer flex-col items-center rounded-2xl border-2 border-dashed border-slate-300 p-10 transition hover:border-blue-500 hover:bg-blue-50/40"><Upload className="h-9 w-9 text-blue-700" /><span className="mt-4 font-medium text-slate-900">Choose a receipt or warranty card</span><span className="mt-1 text-sm text-slate-500">PDF, JPG, or PNG up to 10 MB</span><input type="file" accept="image/*,.pdf" className="sr-only" onChange={event => { const selected = event.target.files?.[0]; if (selected) { setFile(selected); setStep(2); } }} /></label><p className="mt-4 text-xs text-slate-400">Demo mode: OCR extraction is represented by the review form below.</p></div> : <form onSubmit={submit} className="space-y-6 pt-6"><div className="rounded-xl border border-blue-100 bg-blue-50 p-4"><div className="flex gap-3"><FileText className="h-5 w-5 shrink-0 text-blue-700" /><div><p className="text-sm font-medium text-slate-900">Review before saving</p><p className="mt-1 text-sm text-slate-600">Check the extracted or entered details. You can edit everything later.</p>{file && <p className="mt-2 text-xs font-medium text-blue-700">Attached: {file.name}</p>}</div></div></div><div className="grid gap-5 sm:grid-cols-2"><Field label="Device name" required error={errors.name}><input value={form.name} onChange={event => update('name', event.target.value)} placeholder="e.g. Living room television" className="input" /></Field><Field label="Device type" required error={errors.type}><select value={form.type} onChange={event => update('type', event.target.value)} className="input"><option value="">Select type</option>{types.map(type => <option key={type}>{type}</option>)}</select></Field><Field label="Manufacturer" required error={errors.manufacturer}><input value={form.manufacturer} onChange={event => update('manufacturer', event.target.value)} placeholder="e.g. Samsung" className="input" /></Field><Field label="Model"><input value={form.model} onChange={event => update('model', event.target.value)} placeholder="Model number" className="input" /></Field><Field label="Serial number"><input value={form.serialNumber} onChange={event => update('serialNumber', event.target.value)} placeholder="Found on the product label" className="input" /></Field><Field label="Purchase date" required error={errors.purchaseDate}><input type="date" max={today} value={form.purchaseDate} onChange={event => update('purchaseDate', event.target.value)} className="input" /></Field><Field label="Warranty duration (months)" required error={errors.warrantyDuration}><input type="number" min="1" value={form.warrantyDuration} onChange={event => update('warrantyDuration', event.target.value)} className="input" /></Field><Field label="Purchase price"><input type="number" min="0" value={form.purchasePrice} onChange={event => update('purchasePrice', event.target.value)} placeholder="0" className="input" /></Field></div><Field label="Notes"><textarea value={form.notes} onChange={event => update('notes', event.target.value)} rows="3" placeholder="Anything useful to remember" className="input" /></Field><div className="flex justify-end gap-3 border-t border-slate-200 pt-5"><Button type="button" variant="outline" onClick={() => mode === 'scan' && file ? setFile(null) : setMode(null)}>Back</Button><Button type="submit" isLoading={createDevice.isPending}><CheckCircle2 className="mr-2 h-4 w-4" />Save device</Button></div></form>}</Card></div></div>;
 }
+
+function Field({ label, required, error, children }) { return <label className="block text-sm font-medium text-slate-700">{label}{required && <span className="ml-1 text-red-600">*</span>}{children}{error && <span className="mt-1 block text-xs font-normal text-red-600">{error}</span>}</label>; }

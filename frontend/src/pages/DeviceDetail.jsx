@@ -1,814 +1,455 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import {
-  useDeviceQuery,
-  useDocumentsQuery,
-  useUpdateDevice,
-  useDeleteDevice,
-  useUploadDocuments,
-  useAddMaintenanceRecord,
-  openDocument,
-} from '../hooks/useDevices';
-import { useFileUpload } from '../hooks/useFileUpload';
-
-// UI
-import { Card } from '../components/ui/Card';
+import { useState, useRef } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, CalendarDays, CheckCircle2, ClipboardCopy, Download, FileText, FolderOpen, HeartPulse, MoreHorizontal, Plus, ShieldAlert, ShieldCheck, Upload, Wrench } from 'lucide-react';
+import { useDeviceQuery, useDocumentsQuery, useAddMaintenanceRecord, useUploadDocuments, useDeleteDocument, openDocument } from '../hooks/useDevices';
 import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Input } from '../components/ui/Input';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose,
-} from '../components/ui/Dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/Dialog';
 
-// Icons
-import {
-  ArrowLeft, Package, Edit, Trash2, Upload, X, FileText, Image as ImageIcon,
-  Download, ShieldCheck, Clock, ShieldOff, Wrench, ShoppingCart, ExternalLink,
-  Plus, Wrench as Tool, Calendar, DollarSign,
-} from 'lucide-react';
-
-const TABS = ['Overview', 'Documents', 'Maintenance'];
-
-const statusConfig = {
-  active: { label: 'Active', color: 'success' },
-  'expiring-soon': { label: 'Expiring Soon', color: 'warning' },
-  expired: { label: 'Expired', color: 'error' },
+const date = value => value ? new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not recorded';
+const status = {
+  active: { label: 'Protected', color: 'success' },
+  'expiring-soon': { label: 'Expiring soon', color: 'warning' },
+  expired: { label: 'Expired', color: 'danger' },
+  pending: { label: 'Pending', color: 'secondary' },
 };
-
-// ============================================================================
-// 🔽 Local sub-components below: all of these were only ever used on this
-// page (DeviceDetail), so instead of separate files each one lives here.
-// ============================================================================
-
-function DeviceHeader({ device, onEditClick }) {
-  const navigate = useNavigate();
-  const deleteDeviceMutation = useDeleteDevice();
-  const normalizedStatusKey = (device.warrantyStatus || '').toLowerCase().replace(' ', '-');
-  const status = statusConfig[normalizedStatusKey] || { label: 'Unknown', color: 'default' };
-
-  const handleDelete = async () => {
-    if (window.confirm(`Are you sure you want to delete ${device.name}? This action is irreversible.`)) {
-      try {
-        await deleteDeviceMutation.mutateAsync(device.id);
-        navigate('/devices');
-      } catch (error) {
-        console.error('Failed to delete device:', error);
-      }
-    }
-  };
-
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div className="flex items-center gap-4">
-        <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-          <Package className="w-8 h-8 text-gray-600 dark:text-gray-300" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{device.name}</h1>
-          <div className="mt-1 flex items-center gap-2 flex-wrap">
-            <Badge color={status.color}>{status.label}</Badge>
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              • Warranty ends {new Date(device.warrantyEndDate).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <Button variant="ghost" size="icon" onClick={handleDelete}>
-          <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-500" />
-        </Button>
-        <Button variant="outline" onClick={onEditClick}>
-          <Edit className="w-4 h-4 mr-2" />
-          Edit Device
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function EditFormField({ label, children }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function EditDeviceDialog({ isOpen, setIsOpen, device, onSave }) {
-  const [formData, setFormData] = useState(device);
-
-  useEffect(() => {
-    setFormData(device);
-  }, [device, isOpen]);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSave = () => {
-    onSave(formData);
-  };
-
-  const formatDateForInput = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toISOString().split('T')[0];
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit {device.name}</DialogTitle>
-          <DialogDescription>
-            Make changes to your device details here. Click save when you're done.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-          <EditFormField label="Device Name">
-            <Input name="name" value={formData.name || ''} onChange={handleChange} />
-          </EditFormField>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <EditFormField label="Manufacturer">
-              <Input name="manufacturer" value={formData.manufacturer || ''} onChange={handleChange} />
-            </EditFormField>
-            <EditFormField label="Model">
-              <Input name="model" value={formData.model || ''} onChange={handleChange} />
-            </EditFormField>
-          </div>
-
-          <EditFormField label="Serial Number">
-            <Input name="serialNumber" value={formData.serialNumber || ''} onChange={handleChange} />
-          </EditFormField>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <EditFormField label="Purchase Date">
-              <Input type="date" name="purchaseDate" value={formatDateForInput(formData.purchaseDate)} onChange={handleChange} />
-            </EditFormField>
-            <EditFormField label="Warranty End Date">
-              <Input type="date" name="warrantyEndDate" value={formatDateForInput(formData.warrantyEndDate)} onChange={handleChange} />
-            </EditFormField>
-          </div>
-
-          <EditFormField label="Purchase Price">
-            <Input type="number" name="purchasePrice" value={formData.purchasePrice || ''} onChange={handleChange} />
-          </EditFormField>
-
-          <EditFormField label="Notes">
-            <textarea
-              name="notes"
-              value={formData.notes || ''}
-              onChange={handleChange}
-              rows={4}
-              className="w-full mt-1 p-2 border rounded-md bg-transparent dark:border-gray-600 focus:border-primary focus:ring-primary"
-            />
-          </EditFormField>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-          <Button onClick={handleSave}>Save Changes</Button>
-        </DialogFooter>
-        <DialogClose onClick={() => setIsOpen(false)} />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function FilePreview({ file, progress, onRemove, uploading }) {
-  const isImage = file.file.type.startsWith('image/');
-  const isPDF = file.file.type === 'application/pdf';
-  const uploadProgress = progress?.[file.id] || 0;
-
-  return (
-    <div className="relative group">
-      <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-        <div className="relative aspect-square w-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-700">
-          {isImage && file.preview ? (
-            <img src={file.preview} alt={file.file.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              {isPDF ? (
-                <FileText className="h-12 w-12 text-gray-400" />
-              ) : (
-                <ImageIcon className="h-12 w-12 text-gray-400" />
-              )}
-            </div>
-          )}
-
-          {uploading && (
-            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-              <div className="w-16 h-16 relative">
-                <svg className="w-full h-full" viewBox="0 0 36 36">
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none" stroke="#E5E7EB" strokeWidth="3"
-                    className="stroke-current text-gray-200 dark:text-gray-600"
-                  />
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none" stroke="#3B82F6" strokeWidth="3"
-                    strokeDasharray={`${uploadProgress}, 100`}
-                    className="stroke-current text-blue-500"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center text-white font-semibold">
-                  {`${uploadProgress}%`}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-2">
-          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{file.file.name}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">{(file.file.size / 1024 / 1024).toFixed(2)} MB</p>
-        </div>
-
-        {!uploading && (
-          <button
-            onClick={() => onRemove(file.id)}
-            className="absolute -top-2 -right-2 p-1 bg-white dark:bg-gray-700 rounded-full shadow-md text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Remove file</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function FileUploadZone({ onUpload, maxFiles = 5 }) {
-  const dropZoneRef = { current: null };
-  const {
-    files, uploading, error, progress, handleFiles, uploadFiles, removeFile, clearFiles,
-  } = useFileUpload({ onUpload, maxFiles });
-
-  const onDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
-  };
-
-  const onDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
-  const onDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); };
-
-  return (
-    <div className="space-y-4">
-      <div
-        onDrop={onDrop}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 transition-colors duration-150 ease-in-out"
-      >
-        <div className="text-center">
-          <Upload className="mx-auto h-12 w-12 text-gray-400" />
-          <div className="mt-4 flex text-sm leading-6 text-gray-600 dark:text-gray-300">
-            <label
-              htmlFor="file-upload"
-              className="relative cursor-pointer rounded-md font-semibold text-blue-600 dark:text-blue-400 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2 hover:text-blue-500"
-            >
-              <span>Upload files</span>
-              <input
-                id="file-upload"
-                name="file-upload"
-                type="file"
-                className="sr-only"
-                multiple
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => handleFiles(e.target.files)}
-                disabled={uploading}
-              />
-            </label>
-            <p className="pl-1">or drag and drop</p>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">PDF, JPG, JPEG, PNG up to 5MB</p>
-          {maxFiles > 1 && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Maximum {maxFiles} files</p>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div className="text-sm text-red-600 dark:text-red-400 whitespace-pre-line">{error}</div>
-      )}
-
-      {files.length > 0 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {files.map((file) => (
-              <FilePreview key={file.id} file={file} progress={progress} onRemove={removeFile} uploading={uploading} />
-            ))}
-          </div>
-
-          <div className="flex justify-end space-x-3">
-            <Button variant="outline" onClick={clearFiles} disabled={uploading}>Clear All</Button>
-            <Button onClick={uploadFiles} isLoading={uploading} disabled={files.length === 0}>
-              {uploading ? 'Uploading...' : 'Upload Files'}
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function WarrantyStatusPanel({ device }) {
-  const panelConfig = {
-    active: {
-      Icon: ShieldCheck,
-      title: 'Warranty Active',
-      description: "Your device is fully covered under the manufacturer's warranty. No action is needed at this time.",
-      colorClasses: 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300',
-      iconColor: 'text-green-600',
-    },
-    'expiring-soon': {
-      Icon: Clock,
-      title: 'Warranty Expiring Soon',
-      description: 'Your warranty is ending soon. Review your options to ensure continued protection for your device.',
-      colorClasses: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300',
-      iconColor: 'text-yellow-600',
-    },
-    expired: {
-      Icon: ShieldOff,
-      title: 'Warranty Expired',
-      description: 'This device is no longer covered by its warranty. You are now responsible for the full cost of any repairs.',
-      colorClasses: 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300',
-      iconColor: 'text-red-600',
-    },
-  };
-
-  const normalizedStatus = (device.warrantyStatus || '').toLowerCase().replace(' ', '-');
-  const config = panelConfig[normalizedStatus] || panelConfig.active;
-
-  return (
-    <Card className={`border-none ${config.colorClasses}`}>
-      <div className="p-6">
-        <div className="flex items-start gap-4">
-          <config.Icon className={`w-8 h-8 flex-shrink-0 ${config.iconColor}`} />
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{config.title}</h3>
-            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{config.description}</p>
-          </div>
-        </div>
-
-        {normalizedStatus === 'expiring-soon' && (
-          <div className="mt-4 flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" size="sm" className="bg-white/50 dark:bg-black/10">
-              <ExternalLink className="w-4 h-4 mr-2" />
-              Check for Extended Warranty
-            </Button>
-            <Button variant="outline" size="sm" className="bg-white/50 dark:bg-black/10">
-              <Wrench className="w-4 h-4 mr-2" />
-              Schedule Final Check-up
-            </Button>
-          </div>
-        )}
-
-        {normalizedStatus === 'expired' && (
-          <div className="mt-4 flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" size="sm" className="bg-white/50 dark:bg-black/10">
-              <Wrench className="w-4 h-4 mr-2" />
-              Find a Repair Shop
-            </Button>
-            <Button variant="outline" size="sm" className="bg-white/50 dark:bg-black/10">
-              <ShoppingCart className="w-4 h-4 mr-2" />
-              Look for Replacement
-            </Button>
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-function DocumentPreview({ documents, onDocumentClick }) {
-  const [downloadingIds, setDownloadingIds] = useState(new Set());
-
-  if (!documents || documents.length === 0) return null;
-
-  const handleDocumentClick = async (doc) => {
-    const docId = doc?.id;
-    if (docId) setDownloadingIds(prev => new Set([...prev, docId]));
-    try {
-      await onDocumentClick(doc);
-    } finally {
-      if (docId) setDownloadingIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(docId);
-        return newSet;
-      });
-    }
-  };
-
-  return (
-    <div className="mt-8">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Documents</h3>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {documents.map((doc) => {
-          const isDownloading = downloadingIds.has(doc.id);
-          return (
-            <div
-              key={doc.id}
-              onClick={() => !isDownloading && handleDocumentClick(doc)}
-              className={`group relative cursor-pointer overflow-hidden rounded-lg border bg-gray-50 dark:bg-gray-800 dark:border-gray-700 p-2 text-center transition-all hover:shadow-md hover:border-primary/50 ${
-                isDownloading ? 'opacity-50 cursor-wait' : ''
-              }`}
-            >
-              <div className="flex flex-col items-center justify-center h-24">
-                {isDownloading ? (
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                ) : (
-                  <>
-                    {(doc.name && (doc.name.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp)$/) ||
-                      (doc.fileType && doc.fileType.startsWith('image/')))) ? (
-                      doc.fileUrl ? (
-                        <div className="w-full h-full p-2">
-                          <img src={doc.fileUrl} alt={doc.name} loading="lazy" className="object-cover h-full w-full rounded-md" />
-                        </div>
-                      ) : (
-                        <ImageIcon className="w-10 h-10 text-gray-400 group-hover:text-primary" />
-                      )
-                    ) : (
-                      <FileText className="w-10 h-10 text-gray-400 group-hover:text-primary" />
-                    )}
-                  </>
-                )}
-              </div>
-              <p className="mt-2 truncate text-xs font-medium text-gray-700 dark:text-gray-300">
-                {isDownloading ? 'Downloading...' : doc.name}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MaintenanceHistory({ device, onAddRecord }) {
-  const [isAddingRecord, setIsAddingRecord] = useState(false);
-  const [newRecord, setNewRecord] = useState({
-    date: new Date().toISOString().split('T')[0],
-    type: 'maintenance',
-    description: '',
-    cost: '',
-    serviceProvider: '',
-    partsReplaced: '',
-    nextScheduledDate: '',
-  });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onAddRecord({
-      ...newRecord,
-      cost: newRecord.cost ? parseFloat(newRecord.cost) : undefined,
-      partsReplaced: newRecord.partsReplaced ? newRecord.partsReplaced.split(',').map(p => p.trim()) : undefined,
-    });
-    setIsAddingRecord(false);
-    setNewRecord({
-      date: new Date().toISOString().split('T')[0],
-      type: 'maintenance',
-      description: '',
-      cost: '',
-      serviceProvider: '',
-      partsReplaced: '',
-      nextScheduledDate: '',
-    });
-  };
-
-  const formInputClasses = 'mt-1 block w-full rounded-md border border-gray-300 shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500';
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Maintenance History</h2>
-        <Button onClick={() => setIsAddingRecord(true)} className="flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Add Record
-        </Button>
-      </div>
-
-      {isAddingRecord && (
-        <Card className="p-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
-                <input
-                  type="date"
-                  value={newRecord.date}
-                  onChange={(e) => setNewRecord({ ...newRecord, date: e.target.value })}
-                  className={formInputClasses}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
-                <select
-                  value={newRecord.type}
-                  onChange={(e) => setNewRecord({ ...newRecord, type: e.target.value })}
-                  className={formInputClasses}
-                  required
-                >
-                  <option value="maintenance">Maintenance</option>
-                  <option value="repair">Repair</option>
-                  <option value="inspection">Inspection</option>
-                </select>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-                <textarea
-                  value={newRecord.description}
-                  onChange={(e) => setNewRecord({ ...newRecord, description: e.target.value })}
-                  className={formInputClasses}
-                  rows={3}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cost</label>
-                <input
-                  type="number"
-                  value={newRecord.cost}
-                  onChange={(e) => setNewRecord({ ...newRecord, cost: e.target.value })}
-                  className={formInputClasses}
-                  placeholder="0.00"
-                  step="0.01"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Service Provider</label>
-                <input
-                  type="text"
-                  value={newRecord.serviceProvider}
-                  onChange={(e) => setNewRecord({ ...newRecord, serviceProvider: e.target.value })}
-                  className={formInputClasses}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Parts Replaced</label>
-                <input
-                  type="text"
-                  value={newRecord.partsReplaced}
-                  onChange={(e) => setNewRecord({ ...newRecord, partsReplaced: e.target.value })}
-                  className={formInputClasses}
-                  placeholder="Comma separated list"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Next Scheduled Date</label>
-                <input
-                  type="date"
-                  value={newRecord.nextScheduledDate}
-                  onChange={(e) => setNewRecord({ ...newRecord, nextScheduledDate: e.target.value })}
-                  className={formInputClasses}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-4 pt-2">
-              <Button type="button" variant="ghost" onClick={() => setIsAddingRecord(false)}>Cancel</Button>
-              <Button type="submit">Save Record</Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      <div className="space-y-4">
-        {(device.maintenanceHistory || []).map((record) => (
-          <Card key={record.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-            <div className="flex items-start gap-4">
-              <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                <Tool className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                    {record.type.charAt(0).toUpperCase() + record.type.slice(1)}
-                  </h3>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(record.date).toLocaleDateString()}
-                  </span>
-                </div>
-                <p className="mt-1 text-gray-600 dark:text-gray-300">{record.description}</p>
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {record.cost && (
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600 dark:text-gray-300">₹{Number(record.cost).toFixed(2)}</span>
-                    </div>
-                  )}
-                  {record.serviceProvider && (
-                    <div className="flex items-center gap-2">
-                      <Tool className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600 dark:text-gray-300">{record.serviceProvider}</span>
-                    </div>
-                  )}
-                  {record.nextScheduledDate && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600 dark:text-gray-300">
-                        Next: {new Date(record.nextScheduledDate).toLocaleDateString()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {record.partsReplaced && record.partsReplaced.length > 0 && (
-                  <div className="mt-2">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      Parts replaced: {record.partsReplaced.join(', ')}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// 🔼 End of local sub-components. The page itself starts here.
-// ============================================================================
-
 export function DeviceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { data: device, isLoading } = useDeviceQuery(id);
+  const { data: docs = [] } = useDocumentsQuery(id);
+  const addMaintenance = useAddMaintenanceRecord(id);
+  const uploadDocuments = useUploadDocuments(id);
+  const deleteDocument = useDeleteDocument(id);
+  const fileInputRef = useRef(null);
+  const [tab, setTab] = useState('overview');
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false);
+  const [record, setRecord] = useState({ type: 'Maintenance', description: '', date: new Date().toISOString().slice(0, 10), cost: '', serviceProvider: '', nextScheduledDate: '' });
 
-  const { data: device, isLoading, error } = useDeviceQuery(id);
-  const { data: documents = [] } = useDocumentsQuery(id);
-  const updateDeviceMutation = useUpdateDevice(id);
-  const uploadDocumentsMutation = useUploadDocuments(id);
-  const addMaintenanceRecordMutation = useAddMaintenanceRecord(id);
-
-  const [activeTab, setActiveTab] = useState(TABS[0]);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-
-  const handleSave = async (editedData) => {
-    await updateDeviceMutation.mutateAsync(editedData);
-    setIsEditDialogOpen(false);
-  };
-
-  const handleUpload = async (files) => {
-    if (!id || files.length === 0) return;
-    await uploadDocumentsMutation.mutateAsync(files);
-  };
-
-  const handleAddMaintenanceRecord = async (record) => {
-    await addMaintenanceRecordMutation.mutateAsync(record);
-  };
-
-  // Only the very first load (no cached device at all - see useDeviceQuery's
-  // initialData) shows a blocking spinner. If the user got here from
-  // /devices, the card data is already in cache and paints instantly while
-  // the full detail record loads quietly underneath.
-  if (isLoading && !device) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full pt-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+        <div className="p-8">
+          <div className="h-64 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700" />
+        </div>
     );
   }
 
-  if (error || !device) {
+  if (!device) {
     return (
-      <div className="p-6 text-center">
-        <h2 className="text-xl font-bold text-red-600 dark:text-red-400">Error</h2>
-        <p className="text-gray-600 dark:text-gray-300 mt-2">{error?.userMessage || error?.message || 'Could not find the requested device.'}</p>
-        <Button onClick={() => navigate('/devices')} className="mt-4">Back to Devices</Button>
-      </div>
+        <div className="p-8">
+          <Card className="border-slate-200 bg-white p-10 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <h1 className="font-semibold text-slate-950 dark:text-slate-100">Device not found</h1>
+            <Link to="/devices" className="mt-3 inline-block text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+              Back to devices
+            </Link>
+          </Card>
+        </div>
     );
   }
+
+  const saveMaintenance = async () => {
+    await addMaintenance.mutateAsync(record);
+    setMaintenanceOpen(false);
+    setRecord({ type: 'Maintenance', description: '', date: new Date().toISOString().slice(0, 10), cost: '', serviceProvider: '', nextScheduledDate: '' });
+  };
+
+  const handleFileSelected = async event => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) await uploadDocuments.mutateAsync([file]);
+  };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-      <Button variant="ghost" className="text-gray-900 dark:text-white -ml-4" onClick={() => navigate('/devices')}>
-        <ArrowLeft className="w-4 h-4 mr-2" /> Back to Devices
-      </Button>
+      <div className="min-h-screen bg-slate-50 px-4 py-5 transition-colors duration-300 dark:bg-slate-900 sm:px-8 sm:py-8">
+        <div className="mx-auto max-w-6xl space-y-6">
+          <button
+              onClick={() => navigate('/devices')}
+              className="flex items-center gap-2 text-sm font-medium text-slate-500 transition-colors hover:text-blue-700 dark:text-slate-400 dark:hover:text-blue-400"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to devices
+          </button>
 
-      <DeviceHeader device={device} onEditClick={() => setIsEditDialogOpen(true)} />
-
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`${
-                activeTab === tab
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
-              } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}
-            >
-              {tab}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <div className="mt-6">
-        {activeTab === 'Overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <Card>
-                <Card.Header><Card.Title className="text-gray-900 dark:text-white">Device Details</Card.Title></Card.Header>
-                <Card.Content className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Serial Number</h4>
-                    <p className="mt-1 font-semibold text-gray-800 dark:text-white">{device.serialNumber || 'N/A'}</p>
+          <Card className="border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+              <div className="flex gap-4">
+                <div className="rounded-2xl bg-blue-50 p-4 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                  <ShieldCheck className="h-8 w-8" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{device.name}</h1>
+                    <Badge color={status[device.warrantyStatus]?.color}>{status[device.warrantyStatus]?.label}</Badge>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Warranty Provider</h4>
-                    <p className="mt-1 font-semibold text-gray-800 dark:text-white">{device.warrantyProvider || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Purchase Price</h4>
-                    <p className="mt-1 font-semibold text-gray-800 dark:text-white">{device.purchasePrice ? `₹${Number(device.purchasePrice).toLocaleString('en-IN')}` : 'N/A'}</p>
-                  </div>
-                </Card.Content>
-              </Card>
-              <Card>
-                <Card.Header><Card.Title className="text-gray-900 dark:text-white">Notes</Card.Title></Card.Header>
-                <Card.Content>
-                  <p className="whitespace-pre-wrap text-gray-800 dark:text-gray-300">{device.notes || 'No notes provided.'}</p>
-                </Card.Content>
-              </Card>
+                  <p className="mt-1 text-slate-500 dark:text-slate-400">{device.manufacturer} · {device.model}</p>
+                  <p className="mt-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                    <CalendarDays className="h-4 w-4" />
+                    Coverage ends {date(device.warrantyEndDate)}{' '}
+                    {device.daysRemaining >= 0 && `· ${device.daysRemaining} days remaining`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigator.clipboard?.writeText(`${device.name} · ${device.manufacturer} ${device.model} · Serial ${device.serialNumber}`)}
+                    className="dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                >
+                  <ClipboardCopy className="mr-2 h-4 w-4" />
+                  Copy details
+                </Button>
+                <Link
+                    to="/claims"
+                    className="inline-flex items-center justify-center rounded-md bg-blue-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+                >
+                  <Wrench className="mr-2 h-4 w-4" />
+                  Start claim
+                </Link>
+              </div>
             </div>
-            <div className="space-y-6">
-              <WarrantyStatusPanel device={device} />
-              <Card>
-                <Card.Header><Card.Title className="text-gray-900 dark:text-white">Warranty Timeline</Card.Title></Card.Header>
-                <Card.Content>
-                  <div className="relative pl-6">
-                    <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-gray-200 dark:border-gray-700"></div>
-                    <div className="space-y-8">
-                      <div className="relative flex items-center">
-                        <div className="absolute -left-5 h-5 w-5 rounded-full bg-green-500 border-4 border-white dark:border-gray-900"></div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-800 dark:text-white">Purchase Date</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(device.purchaseDate).toLocaleDateString()}</p>
-                        </div>
+          </Card>
+
+          <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
+            <button
+                onClick={() => setTab('overview')}
+                className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                    tab === 'overview'
+                        ? 'border-blue-700 text-blue-800 dark:border-blue-400 dark:text-blue-400'
+                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+            >
+              Overview
+            </button>
+            <button
+                onClick={() => setTab('documents')}
+                className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                    tab === 'documents'
+                        ? 'border-blue-700 text-blue-800 dark:border-blue-400 dark:text-blue-400'
+                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+            >
+              Documents{' '}
+              <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800 dark:text-slate-300">
+              {docs.length}
+            </span>
+            </button>
+            <button
+                onClick={() => setTab('maintenance')}
+                className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                    tab === 'maintenance'
+                        ? 'border-blue-700 text-blue-800 dark:border-blue-400 dark:text-blue-400'
+                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+            >
+              Service history
+            </button>
+          </div>
+
+          {tab === 'overview' && (
+              <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
+                <div className="space-y-6">
+                  <Card className="border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Coverage health</h2>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                          An action indicator based on your record quality and coverage.
+                        </p>
                       </div>
-                      <div className="relative flex items-center">
-                        <div className="absolute -left-5 h-5 w-5 rounded-full bg-red-500 border-4 border-white dark:border-gray-900"></div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-800 dark:text-white">Warranty Expires</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(device.warrantyEndDate).toLocaleDateString()}</p>
-                        </div>
+                      <div className="text-right">
+                        <p
+                            className={`text-3xl font-semibold ${
+                                device.healthScore >= 80
+                                    ? 'text-green-700 dark:text-green-400'
+                                    : device.healthScore >= 60
+                                        ? 'text-amber-700 dark:text-amber-400'
+                                        : 'text-red-700 dark:text-red-400'
+                            }`}
+                        >
+                          {device.healthScore}
+                        </p>
+                        <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">health score</p>
                       </div>
                     </div>
+                    <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                      <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                              device.healthScore >= 80
+                                  ? 'bg-green-600'
+                                  : device.healthScore >= 60
+                                      ? 'bg-amber-500'
+                                      : 'bg-red-600'
+                          }`}
+                          style={{ width: `${device.healthScore}%` }}
+                      />
+                    </div>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Warranty provider</p>
+                        <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{device.warrantyProvider}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Purchase price</p>
+                        <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                          ₹{Number(device.purchasePrice).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Serial number</p>
+                        <p className="mt-1 truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {device.serialNumber || 'Missing'}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex items-center gap-3">
+                      <HeartPulse className="h-5 w-5 text-blue-700 dark:text-blue-400" />
+                      <div>
+                        <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">What to do next</h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Keep this device claim-ready.</p>
+                      </div>
+                    </div>
+                    <div className="mt-5 space-y-3">
+                      {[
+                        { done: Boolean(device.serialNumber), label: 'Serial number recorded' },
+                        { done: Boolean(docs.length), label: 'Proof of purchase attached' },
+                        { done: device.daysRemaining >= 0, label: 'Warranty is currently active' },
+                      ].map(item => (
+                          <div key={item.label} className="flex items-center gap-3 text-sm">
+                            <div
+                                className={`flex h-6 w-6 items-center justify-center rounded-full ${
+                                    item.done
+                                        ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                        : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                }`}
+                            >
+                              {item.done ? <CheckCircle2 className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+                            </div>
+                            <span className={item.done ? 'text-slate-700 dark:text-slate-300' : 'font-medium text-amber-800 dark:text-amber-400'}>
+                        {item.label}
+                      </span>
+                          </div>
+                      ))}
+                    </div>
+                  </Card>
+                </div>
+
+                <Card className="border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                  <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Device details</h2>
+                  <dl className="mt-5 space-y-4 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-500 dark:text-slate-400">Purchase date</dt>
+                      <dd className="font-medium text-slate-900 dark:text-slate-100">{date(device.purchaseDate)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-500 dark:text-slate-400">Warranty length</dt>
+                      <dd className="font-medium text-slate-900 dark:text-slate-100">{device.warrantyDuration} months</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-500 dark:text-slate-400">Category</dt>
+                      <dd className="font-medium text-slate-900 dark:text-slate-100">{device.category}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-500 dark:text-slate-400">Documents</dt>
+                      <dd className="font-medium text-slate-900 dark:text-slate-100">{docs.length} attached</dd>
+                    </div>
+                  </dl>
+                  <div className="mt-6 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Notes</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                      {device.notes || 'No notes added yet.'}
+                    </p>
                   </div>
-                </Card.Content>
-              </Card>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'Documents' && (
-          <Card>
-            <Card.Header><Card.Title className="text-gray-900 dark:text-white">Manage Documents</Card.Title></Card.Header>
-            <Card.Content className="space-y-6">
-              <DocumentPreview documents={documents} onDocumentClick={openDocument} />
-              <div>
-                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Add More Documents</h4>
-                <FileUploadZone onUpload={handleUpload} maxFiles={5} />
+                </Card>
               </div>
-            </Card.Content>
-          </Card>
-        )}
+          )}
 
-        {activeTab === 'Maintenance' && (
-          <MaintenanceHistory device={device} onAddRecord={handleAddMaintenanceRecord} />
-        )}
+          {tab === 'documents' && (
+              <Card className="border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Documents</h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      Keep the evidence you need in the same place as the device.
+                    </p>
+                  </div>
+                  <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelected} accept="image/*,.pdf" />
+                  <Button
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      isLoading={uploadDocuments.isPending}
+                      className="dark:bg-blue-600 dark:hover:bg-blue-500"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload document
+                  </Button>
+                </div>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {docs.map(document => (
+                      <div
+                          key={document.id}
+                          className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/50"
+                      >
+                        <div className="rounded-lg bg-red-50 p-3 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{document.name}</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {document.fileType} · {(document.fileSize / 1024).toFixed(0)} KB · Uploaded {date(document.uploadDate)}
+                          </p>
+                        </div>
+                        <button
+                            onClick={() => openDocument(document)}
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+                            aria-label="Download document"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={() => deleteDocument.mutate(document.id)}
+                            disabled={deleteDocument.isPending}
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+                            aria-label="Delete document"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </div>
+                  ))}
+                  {!docs.length && (
+                      <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-600">
+                        <FolderOpen className="mx-auto h-8 w-8 text-slate-400 dark:text-slate-500" />
+                        <p className="mt-3 font-medium text-slate-900 dark:text-slate-100">No documents yet</p>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                          Upload the receipt or warranty card to complete this record.
+                        </p>
+                      </div>
+                  )}
+                </div>
+              </Card>
+          )}
+
+          {tab === 'maintenance' && (
+              <Card className="border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Service history</h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      Repairs and maintenance help tell the full ownership story.
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={() => setMaintenanceOpen(true)} className="dark:bg-blue-600 dark:hover:bg-blue-500">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add service record
+                  </Button>
+                </div>
+                <div className="mt-6 space-y-5">
+                  {device.maintenanceHistory?.map(item => (
+                      <div key={item.id} className="flex gap-4">
+                        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                          <Wrench className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 border-b border-slate-100 pb-5 dark:border-slate-700">
+                          <div className="flex flex-wrap justify-between gap-2">
+                            <h3 className="font-medium text-slate-900 dark:text-slate-100">{item.type}</h3>
+                            <time className="text-sm text-slate-500 dark:text-slate-400">{date(item.date)}</time>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{item.description}</p>
+                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                            {item.serviceProvider || 'No service provider'} · ₹{Number(item.cost || 0).toLocaleString('en-IN')}
+                          </p>
+                        </div>
+                      </div>
+                  ))}
+                  {!device.maintenanceHistory?.length && (
+                      <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-600">
+                        <Wrench className="mx-auto h-8 w-8 text-slate-400 dark:text-slate-500" />
+                        <p className="mt-3 font-medium text-slate-900 dark:text-slate-100">No service history yet</p>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                          Add repairs, service visits, or scheduled maintenance.
+                        </p>
+                      </div>
+                  )}
+                </div>
+              </Card>
+          )}
+
+          <Dialog open={maintenanceOpen} onOpenChange={setMaintenanceOpen}>
+            <DialogContent className="dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+              <DialogHeader>
+                <DialogTitle className="dark:text-slate-100">Add service record</DialogTitle>
+                <DialogDescription className="dark:text-slate-400">
+                  Record a repair, maintenance visit, or scheduled service.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 px-6 pb-5 sm:grid-cols-2">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Type
+                  <select
+                      value={record.type}
+                      onChange={event => setRecord({ ...record, type: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option>Maintenance</option>
+                    <option>Repair</option>
+                    <option>Inspection</option>
+                  </select>
+                </label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Date
+                  <input
+                      type="date"
+                      value={record.date}
+                      onChange={event => setRecord({ ...record, date: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                </label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 sm:col-span-2">
+                  Description
+                  <textarea
+                      required
+                      value={record.description}
+                      onChange={event => setRecord({ ...record, description: event.target.value })}
+                      rows="3"
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                      placeholder="What was done?"
+                  />
+                </label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Cost
+                  <input
+                      type="number"
+                      min="0"
+                      value={record.cost}
+                      onChange={event => setRecord({ ...record, cost: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                </label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Service provider
+                  <input
+                      value={record.serviceProvider}
+                      onChange={event => setRecord({ ...record, serviceProvider: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                </label>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setMaintenanceOpen(false)} className="dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                  Cancel
+                </Button>
+                <Button onClick={saveMaintenance} disabled={!record.description.trim()} isLoading={addMaintenance.isPending} className="dark:bg-blue-600 dark:hover:bg-blue-500">
+                  Save record
+                </Button>
+              </DialogFooter>
+              <DialogClose onClick={() => setMaintenanceOpen(false)} />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
-
-      <EditDeviceDialog
-        isOpen={isEditDialogOpen}
-        setIsOpen={setIsEditDialogOpen}
-        device={device}
-        onSave={handleSave}
-      />
-    </div>
   );
 }

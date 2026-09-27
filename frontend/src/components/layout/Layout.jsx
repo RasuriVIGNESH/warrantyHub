@@ -1,224 +1,172 @@
 import { useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Package, User, LogOut, Sun, Moon, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Home, Menu, Package, ShieldCheck, Wrench, FileText, Users, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-export function Layout() {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
-  const { logout } = useAuth();
-  const location = useLocation();
-
-  const toggleDarkMode = () => {
-    const newIsDarkMode = !isDarkMode;
-    setIsDarkMode(newIsDarkMode);
-    
-    if (newIsDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'light');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'dark');
-    }
-  };
-
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
-  };
-
-  const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
+const navigation = [
+    { name: 'Overview', href: '/dashboard', icon: Home },
     { name: 'Devices', href: '/devices', icon: Package },
-    { name: 'Profile', href: '/profile', icon: User },
-  ];
+    { name: 'Claims', href: '/claims', icon: Wrench },
+    { name: 'Reports', href: '/reports', icon: FileText },
+    { name: 'Household', href: '/household', icon: Users },
+];
 
-  const isActive = (path) => {
-    if (path === '/') {
-      return location.pathname === '/';
-    }
-    return location.pathname.startsWith(path);
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Mobile menu */}
-      <div className="lg:hidden">
-        <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 shadow relative">
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 absolute left-4"
-          >
-            {isMobileMenuOpen ? (
-              <X className="h-6 w-6" />
-            ) : (
-              <Menu className="h-6 w-6" />
+function Brand({ compact = false }) {
+    return (
+        <Link to="/dashboard" className="flex items-center gap-3">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-700 text-white">
+        <ShieldCheck className="h-6 w-6" />
+      </span>
+            {!compact && (
+                <span>
+          <b className="block text-lg font-semibold tracking-tight text-slate-950 dark:text-white">WarrantyHub</b>
+          <small className="block text-xs text-slate-500 dark:text-slate-400">Protect what matters</small>
+        </span>
             )}
-          </button>
-          <Link to="/" className="text-xl font-bold text-primary flex-1 text-center flex items-center justify-center gap-2">
-            <svg width="30" height="30" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-              <g id="logo-warrantyhub-icon-mobile">
-                <g id="icon" transform="translate(5, 5)">
-                  <path d="M25 0 L50 10 V25 C 50 37.5, 25 50, 25 50 C 25 50, 0 37.5, 0 25 V10 L25 0 Z" 
-                        fill="none" 
-                        stroke="#2563EB" 
-                        strokeWidth="3" />
-                  <path d="M13 24 L22 33 L38 17" 
-                        stroke="#FFFFFF" 
-                        strokeWidth="4" 
-                        fill="none" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round"/>
-                </g>
-              </g>
-            </svg>
-            <span>WarrantyHub</span>
-          </Link>
-        </div>
+        </Link>
+    );
+}
 
-        {isMobileMenuOpen && (
-          <div className="bg-white dark:bg-gray-800 shadow-lg border-t dark:border-gray-700">
-            <nav className="px-4 py-2">
-              {navigation.map((item) => (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-md ${
-                    isActive(item.href)
-                      ? 'text-primary bg-primary/10'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  <item.icon className="h-5 w-5 mr-3" />
-                  {item.name}
-                </Link>
-              ))}
-              <button
-                onClick={toggleDarkMode}
-                className="w-full flex items-center px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md"
-              >
-                {isDarkMode ? (
-                  <Sun className="h-5 w-5 mr-3" />
-                ) : (
-                  <Moon className="h-5 w-5 mr-3" />
-                )}
-                {isDarkMode ? 'Light Mode' : 'Dark Mode'}
-              </button>
-              <button
-                onClick={logout}
-                className="w-full flex items-center px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md"
-              >
-                <LogOut className="h-5 w-5 mr-3" />
-                Logout
-              </button>
-            </nav>
-          </div>
-        )}
-      </div>
+function Navigation({ collapsed, onNavigate }) {
+    const location = useLocation();
+    return (
+        <nav className="space-y-1">
+            {navigation.map(item => {
+                const Icon = item.icon;
+                const active = location.pathname === item.href || (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
+                return (
+                    <NavLink
+                        key={item.href}
+                        to={item.href}
+                        onClick={onNavigate}
+                        title={collapsed ? item.name : undefined}
+                        className={`flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                            collapsed ? 'justify-center' : 'gap-3'
+                        } ${
+                            active
+                                ? 'bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
+                        }`}
+                    >
+                        <Icon className="h-5 w-5 shrink-0" />
+                        {!collapsed && item.name}
+                    </NavLink>
+                );
+            })}
+        </nav>
+    );
+}
 
-      {/* Desktop sidebar */}
-      <div className="hidden lg:flex">
-        <div className={`bg-white dark:bg-gray-800 shadow-lg h-screen fixed transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-64'}`}>
-          <div className="flex flex-col h-full">
-            <div className={`p-6 ${isSidebarCollapsed ? 'px-4' : ''}`}>
-              <Link to="/" className="flex items-center gap-3">
-                <svg width="40" height="40" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-                  <g id="logo-warrantyhub-icon-desktop">
-                    <g id="icon" transform="translate(5, 5)">
-                      <path d="M25 0 L50 10 V25 C 50 37.5, 25 50, 25 50 C 25 50, 0 37.5, 0 25 V10 L25 0 Z" 
-                            fill="none" 
-                            stroke="#2563EB" 
-                            strokeWidth="3" />
-                      <path d="M13 24 L22 33 L38 17" 
-                            stroke="#FFFFFF" 
-                            strokeWidth="4" 
-                            fill="none" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round"/>
-                    </g>
-                  </g>
-                </svg>
-                {!isSidebarCollapsed && (
-                  <div>
-                    <div className="text-xl font-bold text-primary">WarrantyHub</div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Never Miss a Warranty Again.
-                    </p>
-                  </div>
-                )}
-              </Link>
-            </div>
+function UserProfile({ collapsed, onClick }) {
+    const { user } = useAuth();
+    const userName = user?.name || 'User';
+    const initials = userName
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
 
-            <button
-              onClick={toggleSidebar}
-              className="absolute -right-3 top-16 bg-white dark:bg-gray-800 rounded-full p-1 shadow-md border border-gray-200 dark:border-gray-700"
+    return (
+        <button
+            onClick={onClick}
+            title={collapsed ? userName : undefined}
+            className={`flex w-full items-center rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950 transition dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white ${
+                collapsed ? 'justify-center' : 'gap-3'
+            }`}
+        >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-slate-700">
+        {initials}
+      </span>
+            {!collapsed && <span className="truncate">{userName}</span>}
+        </button>
+    );
+}
+
+export function Layout() {
+    const [collapsed, setCollapsed] = useState(false);
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const navigate = useNavigate();
+
+    const handleProfileClick = () => {
+        setMobileOpen(false);
+        navigate('/profile');
+    };
+
+    return (
+        <div className="min-h-screen bg-slate-50 text-slate-950 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-300">
+            {/* Desktop Sidebar */}
+            <aside
+                className={`fixed inset-y-0 left-0 z-40 hidden border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all lg:block ${
+                    collapsed ? 'w-20' : 'w-64'
+                }`}
             >
-              {isSidebarCollapsed ? (
-                <ChevronRight className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-              ) : (
-                <ChevronLeft className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-              )}
-            </button>
-
-            <nav className="flex-1 px-4 space-y-1">
-              {navigation.map((item) => (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'px-4'} py-3 text-sm font-medium rounded-md ${
-                    isActive(item.href)
-                      ? 'text-primary bg-primary/10'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                  title={isSidebarCollapsed ? item.name : undefined}
+                <div className={`flex h-full flex-col p-4 ${collapsed ? 'items-center' : ''}`}>
+                    <div className="mb-10 mt-2">
+                        {collapsed ? <Brand compact /> : <Brand />}
+                    </div>
+                    <Navigation collapsed={collapsed} />
+                    <div className="mt-auto border-t border-slate-200 dark:border-slate-800 pt-4">
+                        <UserProfile collapsed={collapsed} onClick={handleProfileClick} />
+                    </div>
+                </div>
+                <button
+                    aria-label="Toggle sidebar"
+                    onClick={() => setCollapsed(value => !value)}
+                    className="absolute -right-3 top-20 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5 text-slate-500 dark:text-slate-400 shadow-sm hover:text-blue-700 dark:hover:text-blue-400"
                 >
-                  <item.icon className={`h-5 w-5 ${!isSidebarCollapsed && 'mr-3'}`} />
-                  {!isSidebarCollapsed && <span>{item.name}</span>}
-                </Link>
-              ))}
-            </nav>
+                    {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                </button>
+            </aside>
 
-            <div className={`p-4 border-t dark:border-gray-700`}>
-              <button
-                onClick={toggleDarkMode}
-                className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'px-4'} py-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md w-full`}
-                title={isSidebarCollapsed ? (isDarkMode ? 'Light Mode' : 'Dark Mode') : undefined}
-              >
-                {isDarkMode ? (
-                  <Sun className={`h-5 w-5 ${!isSidebarCollapsed && 'mr-3'}`} />
-                ) : (
-                  <Moon className={`h-5 w-5 ${!isSidebarCollapsed && 'mr-3'}`} />
-                )}
-                {!isSidebarCollapsed && <span>{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>}
-              </button>
-              <button
-                onClick={logout}
-                className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'px-4'} py-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md w-full`}
-                title={isSidebarCollapsed ? 'Logout' : undefined}
-              >
-                <LogOut className={`h-5 w-5 ${!isSidebarCollapsed && 'mr-3'}`} />
-                {!isSidebarCollapsed && <span>Logout</span>}
-              </button>
+            {/* Mobile Header */}
+            <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 lg:hidden">
+                <button
+                    className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    onClick={() => setMobileOpen(true)}
+                    aria-label="Open navigation"
+                >
+                    <Menu className="h-5 w-5" />
+                </button>
+                <Brand compact />
+                <div className="w-9" /> {/* Spacer for centering */}
+            </header>
+
+            {/* Main Content */}
+            <div className={`min-h-screen transition-all ${collapsed ? 'lg:pl-20' : 'lg:pl-64'}`}>
+                <main className="p-4 sm:p-6 lg:p-8">
+                    <Outlet />
+                </main>
             </div>
-          </div>
-        </div>
 
-        <div className={`flex-1 transition-all duration-300 ${isSidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-          <main className="flex-1">
-            <Outlet />
-          </main>
+            {/* Mobile Navigation Drawer */}
+            {mobileOpen && (
+                <div className="fixed inset-0 z-50 lg:hidden">
+                    <button
+                        className="absolute inset-0 bg-slate-950/40 dark:bg-slate-950/60"
+                        onClick={() => setMobileOpen(false)}
+                        aria-label="Close navigation"
+                    />
+                    <aside className="relative flex h-full w-72 flex-col bg-white dark:bg-slate-900 p-5 shadow-xl">
+                        <div className="mb-10 flex items-center justify-between">
+                            <Brand />
+                            <button
+                                onClick={() => setMobileOpen(false)}
+                                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                                aria-label="Close navigation"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="flex-1">
+                            <Navigation onNavigate={() => setMobileOpen(false)} />
+                        </div>
+                        <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+                            <UserProfile collapsed={false} onClick={handleProfileClick} />
+                        </div>
+                    </aside>
+                </div>
+            )}
         </div>
-      </div>
-
-      {/* Mobile content */}
-      <div className="lg:hidden">
-        <main className="flex-1">
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  );
-} 
+    );
+}

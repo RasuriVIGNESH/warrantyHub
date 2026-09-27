@@ -14,9 +14,11 @@ export function Button({
   const baseStyles = 'inline-flex items-center justify-center font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2';
   
   const variants = {
-    primary: 'text-white bg-primary hover:bg-primary-dark focus:ring-primary',
+    primary: 'text-white bg-blue-700 hover:bg-blue-800 focus:ring-blue-600',
     secondary: 'text-gray-700 bg-gray-100 hover:bg-gray-200 focus:ring-gray-500 dark:text-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600',
-    outline: 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:ring-primary dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700',
+    outline: 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:ring-blue-600 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700',
+    ghost: 'text-gray-600 bg-transparent hover:bg-gray-100 focus:ring-gray-500 dark:text-gray-300 dark:hover:bg-gray-800',
+    destructive: 'text-white bg-red-700 hover:bg-red-800 focus:ring-red-600',
   };
 
   const sizes = {
@@ -49,7 +51,7 @@ export function Button({
 Button.propTypes = {
   children: PropTypes.node.isRequired,
   type: PropTypes.oneOf(['button', 'submit', 'reset']),
-  variant: PropTypes.oneOf(['primary', 'secondary', 'outline']),
+  variant: PropTypes.oneOf(['primary', 'secondary', 'outline', 'ghost', 'destructive']),
   size: PropTypes.oneOf(['sm', 'md', 'lg']),
   className: PropTypes.string,
   isLoading: PropTypes.bool,

@@ -54,7 +54,7 @@ export function useFileUpload({ onUpload, maxFiles = 5 }) {
     setFiles(prev => [...prev, ...validFiles]);
   }, [files.length, maxFiles]);
 
-  // ✨ UPDATED: This function now sends the entire array of files to onUpload
+  // Sends the entire array of files to onUpload
   const uploadFiles = useCallback(async () => {
     if (files.length === 0) return;
 
